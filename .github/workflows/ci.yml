@@ -67,6 +67,50 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: "1"
 
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [api, web]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-retries 10
+    env:
+      E2E_ADMIN_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+      E2E_WORKDIR: ${{ github.workspace }}/e2e-output
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: uv sync --frozen
+        working-directory: apps/api
+      - run: pnpm install --frozen-lockfile
+      - name: Install Playwright (Chromium)
+        run: |
+          npm install -g playwright@1.63.0
+          npx playwright install --with-deps chromium
+          echo "NODE_PATH=$(npm root -g)" >> "$GITHUB_ENV"
+      - run: ./apps/web/e2e/run-local.sh
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-output
+          path: e2e-output
+          retention-days: 7
+
   compose:
     runs-on: ubuntu-latest
     steps:

@@ -94,6 +94,10 @@ async def make_scan_result(conn: AsyncConnection, org: uuid.UUID) -> uuid.UUID:
 
 
 async def test_migrations_downgrade_to_base_and_upgrade_again(owner_engine: AsyncEngine) -> None:
+    # Downgrading past the seed migration is only possible with no customer data (a trial plan
+    # in use by subscriptions must not be deleted), so start from empty tables.
+    async with owner_engine.begin() as conn:
+        await conn.execute(text("TRUNCATE users, organizations CASCADE"))
     await run_alembic("downgrade", "base")
     async with owner_engine.connect() as conn:
         tables = (

@@ -68,7 +68,8 @@ class Invitation(UUIDPk, TenantOwned, Timestamps, Base):
             unique=True,
             postgresql_where=sql("accepted_at IS NULL AND revoked_at IS NULL"),
         ),
-        check_in("role", MemberRole),
+        # Ownership is never granted by invitation (only via transfer).
+        check_in("role", [r for r in MemberRole if r != MemberRole.OWNER]),
     )
 
     email: Mapped[str] = mapped_column(CITEXT, nullable=False)

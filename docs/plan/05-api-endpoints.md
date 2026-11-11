@@ -14,7 +14,9 @@ Registration, login, logout and password recovery happen in Supabase Auth from t
 |---|---|---|---|
 | GET | /me | Current user + memberships | authenticated |
 | PATCH | /me | Update profile | authenticated |
-| POST | /auth/session/revoke | Revoke all extension tokens + sign-out hook | authenticated |
+| POST | /auth/session/revoke | Revoke all extension tokens + sign-out hook (M12) | authenticated |
+
+The first authenticated request creates the user's local record (`users` mirrors the identity provider) and keeps the email in sync.
 
 ## Organizations and team
 | Method | Path | Purpose | Perm |
@@ -23,13 +25,28 @@ Registration, login, logout and password recovery happen in Supabase Auth from t
 | GET | /organizations/current | Org details | member |
 | PATCH | /organizations/current | Rename etc. | org.manage |
 | DELETE | /organizations/current | Soft-delete org | org.delete (owner) |
-| GET | /members | List members | member |
+| GET | /members | List members (with email/name) | member |
 | PATCH | /members/{user_id} | Change role / suspend | members.manage |
 | DELETE | /members/{user_id} | Remove member | members.manage |
-| GET/POST | /invitations | List / create invite (email sent) | members.manage |
+| DELETE | /members/me | Leave the organization (owners must transfer first) | member |
+| GET | /invitations | List pending invitations | member |
+| POST | /invitations | Create invite and send email; response says whether the email was delivered | members.manage |
+| POST | /invitations/{id}/resend | New token (old link stops working), new expiry, email again | members.manage |
 | DELETE | /invitations/{id} | Revoke | members.manage |
-| POST | /invitations/accept | Accept by token | authenticated |
-| POST | /organizations/current/transfer-ownership | | owner |
+| POST | /invitations/preview | `{token}` → org name, role, status, whether the email matches the signed-in user | authenticated |
+| POST | /invitations/accept | `{token}` → join (email must match) | authenticated |
+| POST | /organizations/current/transfer-ownership | Owner hands over ownership and becomes admin | owner |
+
+**Implemented in M3.** Rules:
+- Ownership is never assignable by invite or role change, only by transfer.
+- Admins can't modify the owner or themselves.
+- Suspended members lose access immediately.
+- Cross-tenant access returns 404.
+- **Rate limits** (per verified user unless noted):
+  - org create: 10/h
+  - invite create and resend: 30/h each
+  - invite preview + accept: 20/min combined
+  - all API routes except health: 300/min per IP
 
 ## Marketplace connections
 | Method | Path | Purpose | Perm |

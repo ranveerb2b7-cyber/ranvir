@@ -18,4 +18,5 @@ Status: **Approved 2026-11-11 with scope changes (see Decisions log).**
 |---|---|
 | 2026-11-11 | **Amazon.in only for now.** Flipkart (milestone M9 and Flipkart parts of other milestones) is deferred. The connector interface stays marketplace-agnostic so Flipkart can be added later without reworking the engine. |
 | 2026-11-11 | **Target customers are Amazon.in sellers with Seller Central accounts.** Each organization connects its own seller account (feasibility §6.4 options A/B). Option C (one shared SellerScope account) is rejected. |
-| 2026-11-11 | Defaults pending explicit confirmation: hosted Supabase Auth (Mumbai region); billing provider decided at M13. |
+| 2026-11-11 | **Auth:** hosted Supabase Auth (Mumbai region) for staging/production; self-hosted GoTrue container in docker-compose for local development (approved). Billing provider decided at M13. |
+| 2026-11-11 | **Web data fetching:** TanStack Query, as listed in the architecture, adopted in M3. |

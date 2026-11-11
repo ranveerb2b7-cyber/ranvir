@@ -4,8 +4,22 @@ Status: **PROPOSAL — awaiting approval.**
 
 ## 9.1 Authentication
 - Supabase Auth handles passwords (bcrypt), email verification, password recovery, and optional MFA (TOTP) for owners/admins.
-- FastAPI verifies JWTs against the Supabase JWKS, checking signature, `exp`, `aud` and `iss`. Clock skew allowance is ≤ 60 s.
-- The web app keeps the session in httpOnly, Secure, SameSite=Lax cookies via `@supabase/ssr`. It never stores tokens in localStorage.
+- FastAPI verifies access tokens (`sellerscope.auth.tokens`), implemented in M3:
+  - **Keys:** asymmetric keys from the project's JWKS (RS256/ES256, hosted Supabase), or a shared HS256 secret (local GoTrue). Only the algorithm matching the configured key type is accepted, so `alg: none` and HS/RS confusion are rejected.
+  - **Claims:** `exp`, `aud`, `iss` and `sub` are required. Allowed clock skew is 30 s.
+  - **Who:** only `role = authenticated` users with an email; anonymous sign-ins and `anon`/`service_role` keys are rejected.
+  - **Production:** startup fails in staging/production without an issuer and a key source.
+- **Correction (M3):** the web app keeps the Supabase session in cookies managed by `@supabase/ssr`. These cookies are **readable by JavaScript**, by design of that library, because the browser client refreshes tokens itself. They are not httpOnly, as an earlier draft claimed.
+  - **Mitigations:**
+    - the strict CSP planned for M14
+    - no third-party scripts
+    - short-lived access tokens (1 h)
+    - refresh-token rotation in Supabase Auth
+    - every API call independently verified
+  - `proxy.ts` validates the session with the auth server before rendering protected pages.
+  - The selected organization id is the only value in localStorage, and it is not a secret.
+- Sign-in, sign-up and sign-out clear the client data cache, so a previous user's data is never shown.
+- `?next=` redirects are restricted to same-site relative paths (open-redirect protection, unit tested).
 - **Extension tokens:** paired via a one-time code + PKCE. They are opaque random 256-bit values, stored hashed (SHA-256), scoped (`extension:read`, `extension:check`), expire after 90 days, and can be revoked from the web UI.
 
 ## 9.2 Authorization and tenant isolation

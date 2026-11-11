@@ -99,3 +99,102 @@ async def add(conn: AsyncConnection, table: Table, **values: Any) -> uuid.UUID:
 async def marketplace_id(conn: AsyncConnection) -> uuid.UUID:
     row = (await conn.execute(text("SELECT id FROM marketplaces WHERE code = 'amazon_in'"))).one()
     return uuid.UUID(str(row[0]))
+
+
+# ----------------------------------------------------------------------------- API fixtures
+
+import time as _time  # noqa: E402
+from email.message import EmailMessage  # noqa: E402
+
+import jwt  # noqa: E402
+from httpx import ASGITransport, AsyncClient  # noqa: E402
+from redis.asyncio import Redis  # noqa: E402
+
+from sellerscope.core.config import AppEnv, Settings  # noqa: E402
+from sellerscope.main import create_app  # noqa: E402
+
+AUTH_ISSUER = "http://auth.test/auth/v1"
+AUTH_SECRET = "integration-test-hs256-secret-32-bytes!!"  # test-only signing key
+WEB_BASE = "http://web.test"
+
+
+class RecordingMailer:
+    def __init__(self) -> None:
+        self.sent: list[EmailMessage] = []
+
+    async def send(self, message: EmailMessage) -> None:
+        self.sent.append(message)
+
+    def last_token(self, to: str) -> str:
+        for message in reversed(self.sent):
+            if message["To"] == to:
+                body = message.get_content()
+                return body.split("accept-invite?token=")[1].split()[0]
+        raise AssertionError(f"no email to {to}")
+
+
+def api_settings(**overrides: Any) -> Settings:
+    base = integration_settings()
+    assert base is not None
+    values: dict[str, Any] = {
+        "app_env": AppEnv.TEST,
+        "database_url": app_url(),
+        "redis_url": base.redis_url.get_secret_value(),
+        "auth_jwt_issuer": AUTH_ISSUER,
+        "auth_jwt_secret": AUTH_SECRET,
+        "web_base_url": WEB_BASE,
+        "rate_limit_ip_per_minute": 100_000,
+    }
+    values.update(overrides)
+    return Settings(**values)
+
+
+def mint(user_id: uuid.UUID, email: str, **overrides: Any) -> str:
+    now = int(_time.time())
+    payload: dict[str, Any] = {
+        "sub": str(user_id),
+        "email": email,
+        "aud": "authenticated",
+        "iss": AUTH_ISSUER,
+        "role": "authenticated",
+        "iat": now,
+        "exp": now + 3600,
+    }
+    payload.update(overrides)
+    return jwt.encode(payload, AUTH_SECRET, algorithm="HS256")
+
+
+class AppUser:
+    def __init__(self, label: str) -> None:
+        self.id = uuid.uuid4()
+        self.email = f"{label}-{self.id.hex[:8]}@example.com"
+
+    def headers(self, org: uuid.UUID | str | None = None) -> dict[str, str]:
+        h = {"Authorization": f"Bearer {mint(self.id, self.email)}"}
+        if org:
+            h["X-Organization-Id"] = str(org)
+        return h
+
+
+@pytest.fixture(scope="session")
+async def _flush_test_redis() -> None:
+    base = integration_settings()
+    assert base is not None
+    redis = Redis.from_url(base.redis_url.get_secret_value())
+    await redis.flushdb()
+    await redis.aclose()
+
+
+@pytest.fixture
+async def api(
+    owner_engine: AsyncEngine, _flush_test_redis: None
+) -> AsyncIterator[tuple[AsyncClient, RecordingMailer]]:
+    app = create_app(api_settings())
+    mailer = RecordingMailer()
+    app.state.mailer = mailer
+    transport = ASGITransport(app=app)
+    async with (
+        app.router.lifespan_context(app),
+        AsyncClient(transport=transport, base_url="http://api.test") as c,
+    ):
+        yield c, mailer

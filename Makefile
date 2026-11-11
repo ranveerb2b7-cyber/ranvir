@@ -3,7 +3,7 @@ API := apps/api
 TEST_DATABASE_URL ?= postgresql+asyncpg://sellerscope:sellerscope@127.0.0.1:5432/sellerscope_test
 TEST_REDIS_URL ?= redis://127.0.0.1:6379/15
 
-.PHONY: help install up down migrate migration api worker web lint typecheck test test-api test-web build-web
+.PHONY: help install up down migrate migration api worker web lint typecheck test test-api test-web test-e2e build-web
 
 help:
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -48,6 +48,9 @@ test-api: ## Backend tests (integration tests need Postgres + Redis)
 
 test-web: ## Frontend unit tests
 	pnpm web:test
+
+test-e2e: ## Browser end-to-end test against a throwaway local stack (needs Postgres, Redis, Playwright)
+	./apps/web/e2e/run-local.sh
 
 build-web: ## Production build of the web app
 	pnpm web:build

@@ -7,7 +7,7 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 | **M0** ✅ | Planning (this) | Architecture, ERD, API plan, feasibility reports | Your approval | — |
 | **M1** ✅ | Monorepo foundation | Folder structure, uv + pnpm workspaces, docker-compose (pg, redis, minio, mailpit, auth), Makefile, CI (lint/type/test), `.env.example`, README, CLAUDE.md, health endpoints, Next.js shell | `make test` green; CI green; `/health/ready` checks DB + Redis; web builds; compose file validates | none |
 | **M2** ✅ | Database schema | SQLAlchemy models + Alembic migrations for all tables, RLS policies, DB roles, append-only triggers, seed of `marketplaces` / `plans` | Migrations up/down on empty DB; RLS test: the app role can't read another org's rows even without a WHERE clause; UPDATE on `scan_results` is rejected; unique/partial indexes enforced | none |
-| **M3** | Auth + orgs + RBAC | Supabase JWT verification, `/me`, org creation, invitations, member management, permission dependency, audit log writes, API rate limiting; web login/register/forgot/reset/accept-invite pages, org switcher, Team page | Invalid/expired JWT → 401; viewer can't write → 403; cross-org access → 404 for **every** tenant endpoint (generated test matrix); invite flow e2e; password reset e2e (Mailpit) | Supabase project URL + anon key + JWT secret/JWKS (or local GoTrue) |
+| **M3** ✅ | Auth + orgs + RBAC | Supabase JWT verification, `/me`, org creation, invitations, member management, permission dependency, audit log writes, API rate limiting; web login/register/forgot/reset/accept-invite pages, org switcher, Team page | Invalid/expired JWT → 401; viewer can't write → 403; cross-org access → 404 for **every** tenant endpoint (generated test matrix); invite flow e2e; password reset e2e (Mailpit) | Supabase project URL + anon key + JWT secret/JWKS (or local GoTrue) |
 | **M4** | Initial dashboard + product management | App shell with 9 nav items, product CRUD, ASIN/FSN validators, duplicate detection, product table (search/filter/sort/pagination), brand filter, bulk actions, KPI tiles wired to real (initially empty) data | Validator unit tests (valid/invalid/edge cases); duplicate → 409; table query tests; Playwright: add product, filter, paginate; empty states say "No scans yet", never 0 | none |
 | **M5** | Uploads | Template download, upload with size/type/magic-byte checks, async parse, preview accepted/rejected rows, dedupe (in file + existing), commit, history, rejected-rows CSV | Fixture files: valid, mixed, malformed, oversize, wrong type, macro-enabled `.xlsm` rejected, 50k rows within time budget; formula-injection-safe exports | none |
 | **M6** | Scanning engine + connector interfaces | Connector protocol and registry, **MockConnector (dev/test only, labelled)**, job/item state machine, Celery queues, token bucket, backoff, retries, cancellation, stale reaper, duplicate-scan guard, scan UI with live progress | Concurrency test: two scan requests for the same product → one 409; 429 → retried with backoff (fake clock); cancellation; production boot refuses the mock connector; failed items visible with reason | none |
@@ -29,6 +29,7 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 | M0 | ✅ Complete | Plan approved with Amazon-only scope |
 | M1 | ✅ Complete | See "M1 report" below |
 | M2 | ✅ Complete | See "M2 report" below |
+| M3 | ✅ Complete (with stated limits) | See "M3 report" below |
 | M9 | ⏸ Deferred | Flipkart out of current scope |
 | Others | Not started | |
 
@@ -100,3 +101,55 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 - `docker compose up` (no Docker daemon in the build sandbox); the compose file validates.
 - Trial plan limits are placeholders until pricing is decided (M13).
 - Cross-tenant paths for invitation acceptance (M3) and the scheduler (M6) are designed but not built (see 03-database-design §3.4).
+
+### M3 report (2026-11-11)
+
+**Delivered: backend**
+- **Access-token verification:** JWKS (RS256/ES256) or HS256 secret, plus strict claim checks. Staging/production refuse to start without an auth configuration.
+- **First-login user sync.** `X-Organization-Id` membership check: non-members and suspended members get 404.
+- **RBAC** via `require(Permission)`, with the role matrix unit-tested against the architecture doc.
+- **Organizations:** create (owner plus trial subscription), get, rename, soft-delete.
+- **Members:** list, change role/status, remove, leave, ownership transfer, with guard rails: the owner is untouchable except through transfer, and you can't edit yourself.
+- **Invitations:** create, resend, revoke, preview, accept.
+  - Tokens are 256-bit; only the SHA-256 is stored.
+  - Acceptance requires the invitation email to match the signed-in user's email.
+  - Acceptance runs through `SECURITY DEFINER` functions (migration `0004`).
+- **Invitation emails** go over SMTP and are sent only after the invitation is committed. A failed delivery is reported (`email_sent: false`), not hidden.
+- **Audit log** entries for every org, member and invitation change.
+- **Redis rate limits:** per IP globally, plus per verified user on sensitive endpoints. They fail open if Redis is down, and that is logged.
+
+**Delivered: web**
+- Supabase SSR client and `proxy.ts` route protection with safe `?next=` redirects.
+- Pages: login, register, forgot password, reset password, `/auth/callback` (PKCE code exchange), onboarding (create organization), accept invitation (with a wrong-account message), organization switcher, user menu and sign-out.
+- **Team page:** invite, role change, remove, make owner, pending invites with resend/cancel. It is read-only for analysts and viewers.
+- **Settings page:** profile, organization name, leave, delete.
+- TanStack Query for data fetching.
+
+**Delivered: local stack**
+- docker-compose `auth` (`supabase/gotrue:v2.197.0`) on its own `auth` database, behind an nginx `auth-gateway` that serves it at `/auth/v1` on port 54321 like hosted Supabase.
+- Mailpit receives both GoTrue's emails and SellerScope's invitation emails.
+
+**Verified**
+- **Backend: 100 tests pass** (ruff and mypy strict clean). They include:
+  - 17 token tests (valid HS256, expired, wrong key/aud/iss, `alg: none`, anon/service_role/anonymous, missing email/exp, ES256 via a real JWKS HTTP endpoint, HS256 rejected when only JWKS is configured).
+  - The full invitation lifecycle, RBAC per role, member rules, and 429 with `Retry-After`.
+  - SMTP delivery to a real SMTP server.
+  - **Cross-tenant matrix:** every organization-scoped route (12, discovered from the app and cross-checked against OpenAPI) returns 404 for non-members and for foreign resource ids, and the victim org's data is unchanged afterwards. A planted bug (membership check removed) made the matrix fail as expected.
+  - A meta-test fails if a new route is neither org-scoped nor explicitly allow-listed.
+- **Web:** 20 unit tests pass (open-redirect guard, error parsing, Team page role visibility). Lint, typecheck and production build are clean.
+- **Browser end-to-end** (`make test-e2e`, also added to CI): 11 steps pass against the real API, a fresh database, real SMTP delivery and the production web build:
+  - sign-up, then onboarding, then invite by email, then the invitee registers and accepts
+  - analyst read-only view
+  - an accepted link can't be reused
+  - role change
+  - second organization, switcher and isolation
+  - rename
+  - mobile layout (no horizontal scroll)
+- **Bugs the e2e run found and fixed:**
+  - a stale cached "no organizations" answer bounced users back to onboarding
+  - a squashed role selector on mobile
+
+**Not verified / remaining**
+- **Real Supabase Auth was not exercised.** Building GoTrue from source in the sandbox was blocked by policy, and Docker isn't available. The e2e run used a test-only stand-in (`apps/web/e2e/stub-auth.mjs`). Still unchecked: email confirmation, the PKCE callback, the real password-reset email flow, and GoTrue rate limits. Check these with `make up` + Mailpit, or a staging Supabase project.
+- **The GoTrue image tag `v2.197.0`** is taken from the auth repository's changelog and hasn't been pulled. The compose `auth` and `auth-gateway` services are written but haven't been run.
+- **Planned for later:** MFA for owners/admins is a Supabase project setting, to configure at deployment (M14). Org purge after soft-delete is part of the retention work (M14). The `/auth/session/revoke` endpoint arrives with extension tokens (M12).

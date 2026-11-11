@@ -21,3 +21,7 @@ coverage/
 .DS_Store
 .idea/
 .vscode/
+
+# local service data
+dump.rdb
+*.rdb

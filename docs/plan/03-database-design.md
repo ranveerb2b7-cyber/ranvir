@@ -253,6 +253,6 @@ With no context set, tenant queries return no rows.
 2. A trigger rejects UPDATE and DELETE for every role, including the owner. The only exception is DELETE inside a transaction that sets `app.retention_purge = 'on'`, for owner-run retention jobs.
 
 **Deferred to later milestones:**
-- **M3, invitation acceptance:** an invitee isn't yet a member, so looking up an invitation by token crosses tenants. This will use a narrowly scoped `SECURITY DEFINER` function.
+- **M3, invitation acceptance (done, migration `0004`):** `invitation_preview(token_hash)` and `accept_invitation(token_hash)` are `SECURITY DEFINER` functions with a fixed `search_path`, executable only by the app role. They act only on the single invitation matching the presented token hash, only for the signed-in user (`app.current_user_id`), and only if the invitation email equals that user's email. Acceptance locks the row, checks it isn't used, revoked or expired, and creates the membership. Memberships created this way get a random UUIDv4 id (PostgreSQL 16 has no UUIDv7 generator). The `invitations.role` CHECK now excludes `owner`.
 - **M6, scheduler:** Celery beat must find due products across all orgs. This will use a dedicated role or `SECURITY DEFINER` function that returns only `(organization_id, product_id)` pairs.
 - **Volume:** partitioning of snapshot tables is deferred until data volume requires it.

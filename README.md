@@ -7,8 +7,8 @@ Marketplace seller mapping and intelligence SaaS for brand owners and manufactur
 | | |
 |---|---|
 | Scope | **Amazon.in only.** Flipkart deferred. |
-| Done | M0 planning, M1 monorepo foundation, M2 database schema (RLS tenant isolation, append-only snapshots) |
-| Next | M3 authentication, organizations and RBAC |
+| Done | M0 planning, M1 foundation, M2 database schema (RLS isolation), M3 authentication, organizations, team & roles |
+| Next | M4 dashboard + product management |
 
 No business features are complete yet. See [`docs/plan/08-milestones.md`](docs/plan/08-milestones.md) for progress and [`docs/plan/`](docs/plan/README.md) for the design.
 
@@ -18,6 +18,15 @@ No business features are complete yet. See [`docs/plan/08-milestones.md`](docs/p
 - **Flipkart:** not supported. No authorized API is known to provide competitor seller data ([report](docs/plan/07-flipkart-feasibility.md)).
 
 SellerScope never fabricates seller counts, prices or seller identities. Unavailable data is shown as unavailable.
+
+## Authentication setup
+
+| Environment | Auth provider | API settings |
+|---|---|---|
+| Local | GoTrue container (docker-compose) | `AUTH_JWT_ISSUER=http://localhost:54321/auth/v1`, `AUTH_JWT_SECRET` (same value GoTrue signs with) |
+| Staging / production | Hosted Supabase project (Mumbai region) | `AUTH_JWT_ISSUER=https://<ref>.supabase.co/auth/v1`, `AUTH_JWKS_URL=https://<ref>.supabase.co/auth/v1/.well-known/jwks.json` |
+
+The web app needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`, the public key. They're compiled into the browser bundle at build time.
 
 ## Repository layout
 
@@ -41,7 +50,9 @@ cp .env.example .env
 make up
 ```
 
-API: http://localhost:8000/docs · Web: http://localhost:3000 · Mail: http://localhost:8025
+Web: http://localhost:3000 · API docs: http://localhost:8000/docs · Mail (Mailpit): http://localhost:8025 · Auth (local GoTrue): http://localhost:54321/auth/v1
+
+Sign-up sends a confirmation email to Mailpit. Open it there to activate the account.
 
 Without Docker (services running locally; create the app role first, as `infra/docker/postgres/init/01-app-role.sh` does):
 
@@ -71,11 +82,22 @@ Checks:
 make lint typecheck test
 ```
 
+Browser end-to-end test (needs local Postgres + Redis + Playwright; see `apps/web/e2e/README.md`):
+
+```bash
+make test-e2e
+```
+
 Backend integration tests need `TEST_DATABASE_URL` (a user with CREATEROLE; the tests drop and recreate the `public` schema of that database) and `TEST_REDIS_URL`. The Makefile defaults to a local `sellerscope_test` database and Redis DB 15. In CI, integration tests are required to run.
 
 ## API
 
-- `GET /api/v1/health/live`: process liveness
-- `GET /api/v1/health/ready`: PostgreSQL + Redis readiness (503 if degraded)
+- `GET /api/v1/health/live`, `GET /api/v1/health/ready`
+- `GET|PATCH /api/v1/me`
+- `POST /api/v1/organizations`, `GET|PATCH|DELETE /api/v1/organizations/current`, `POST /api/v1/organizations/current/transfer-ownership`
+- `GET /api/v1/members`, `PATCH|DELETE /api/v1/members/{user_id}`, `DELETE /api/v1/members/me`
+- `GET|POST /api/v1/invitations`, `POST /api/v1/invitations/{id}/resend`, `DELETE /api/v1/invitations/{id}`, `POST /api/v1/invitations/preview`, `POST /api/v1/invitations/accept`
+
+Authentication: `Authorization: Bearer <Supabase access token>`. Organization-scoped endpoints also need `X-Organization-Id`.
 
 OpenAPI: `/api/v1/openapi.json` (disabled in staging/production). The full endpoint plan is in [`docs/plan/05-api-endpoints.md`](docs/plan/05-api-endpoints.md).

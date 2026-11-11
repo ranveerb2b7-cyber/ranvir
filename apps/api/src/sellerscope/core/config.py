@@ -34,6 +34,28 @@ class Settings(BaseSettings):
 
     redis_url: SecretStr = Field(default=SecretStr("redis://localhost:6379/0"))
 
+    # ---- Authentication (Supabase Auth / GoTrue access tokens) ----
+    # Expected `iss` claim, e.g. https://<project>.supabase.co/auth/v1 (hosted) or the local
+    # GoTrue URL. Tokens are verified with JWKS (RS256/ES256) and/or a shared HS256 secret.
+    auth_jwt_issuer: str | None = None
+    auth_jwt_audience: str = "authenticated"
+    auth_jwks_url: str | None = None
+    auth_jwt_secret: SecretStr | None = None
+
+    # ---- Web app / email ----
+    web_base_url: str = "http://localhost:3000"
+    smtp_host: str = "localhost"
+    smtp_port: int = 1025
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_starttls: bool = False
+    smtp_from: str = "SellerScope <no-reply@sellerscope.local>"
+    invitation_ttl_hours: int = Field(default=168, gt=0)
+
+    # ---- Rate limiting (Redis fixed window) ----
+    rate_limit_enabled: bool = True
+    rate_limit_ip_per_minute: int = Field(default=300, gt=0)
+
     # Comma-separated list of allowed browser origins (web app, extension).
     cors_origins: str = "http://localhost:3000"
 
@@ -58,6 +80,13 @@ class Settings(BaseSettings):
                 "ENABLE_MOCK_CONNECTOR must be false in staging/production: "
                 "mock data must never reach real customers."
             )
+        if self.is_production_like:
+            if not self.auth_jwt_issuer:
+                raise ValueError("AUTH_JWT_ISSUER is required in staging/production.")
+            if not (self.auth_jwks_url or self.auth_jwt_secret):
+                raise ValueError(
+                    "AUTH_JWKS_URL or AUTH_JWT_SECRET is required in staging/production."
+                )
         return self
 
 
