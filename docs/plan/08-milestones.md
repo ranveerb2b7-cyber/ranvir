@@ -6,7 +6,7 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 |---|---|---|---|---|
 | **M0** ✅ | Planning (this) | Architecture, ERD, API plan, feasibility reports | Your approval | — |
 | **M1** ✅ | Monorepo foundation | Folder structure, uv + pnpm workspaces, docker-compose (pg, redis, minio, mailpit, auth), Makefile, CI (lint/type/test), `.env.example`, README, CLAUDE.md, health endpoints, Next.js shell | `make test` green; CI green; `/health/ready` checks DB + Redis; web builds; compose file validates | none |
-| **M2** | Database schema | SQLAlchemy models + Alembic migrations for all tables, RLS policies, DB roles, append-only triggers, seed of `marketplaces` / `plans` | Migrations up/down on empty DB; RLS test: the app role can't read another org's rows even without a WHERE clause; UPDATE on `scan_results` is rejected; unique/partial indexes enforced | none |
+| **M2** ✅ | Database schema | SQLAlchemy models + Alembic migrations for all tables, RLS policies, DB roles, append-only triggers, seed of `marketplaces` / `plans` | Migrations up/down on empty DB; RLS test: the app role can't read another org's rows even without a WHERE clause; UPDATE on `scan_results` is rejected; unique/partial indexes enforced | none |
 | **M3** | Auth + orgs + RBAC | Supabase JWT verification, `/me`, org creation, invitations, member management, permission dependency, audit log writes, API rate limiting; web login/register/forgot/reset/accept-invite pages, org switcher, Team page | Invalid/expired JWT → 401; viewer can't write → 403; cross-org access → 404 for **every** tenant endpoint (generated test matrix); invite flow e2e; password reset e2e (Mailpit) | Supabase project URL + anon key + JWT secret/JWKS (or local GoTrue) |
 | **M4** | Initial dashboard + product management | App shell with 9 nav items, product CRUD, ASIN/FSN validators, duplicate detection, product table (search/filter/sort/pagination), brand filter, bulk actions, KPI tiles wired to real (initially empty) data | Validator unit tests (valid/invalid/edge cases); duplicate → 409; table query tests; Playwright: add product, filter, paginate; empty states say "No scans yet", never 0 | none |
 | **M5** | Uploads | Template download, upload with size/type/magic-byte checks, async parse, preview accepted/rejected rows, dedupe (in file + existing), commit, history, rejected-rows CSV | Fixture files: valid, mixed, malformed, oversize, wrong type, macro-enabled `.xlsm` rejected, 50k rows within time budget; formula-injection-safe exports | none |
@@ -28,6 +28,7 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 |---|---|---|
 | M0 | ✅ Complete | Plan approved with Amazon-only scope |
 | M1 | ✅ Complete | See "M1 report" below |
+| M2 | ✅ Complete | See "M2 report" below |
 | M9 | ⏸ Deferred | Flipkart out of current scope |
 | Others | Not started | |
 
@@ -60,3 +61,42 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 - `docker compose up` could not be run: no Docker daemon in the build sandbox. It must be run on a developer machine or in CI.
 - The CI workflow has not run on GitHub yet; it will on the next push.
 - No database schema, auth, or business features yet. These are M2+.
+
+### M2 report (2026-11-11)
+
+**Delivered**
+- SQLAlchemy 2 models for all 22 tables (`apps/api/src/sellerscope/models/`).
+- Alembic, with three migrations:
+  - `0001` schema
+  - `0002` security layer (app-role grants, RLS policies, append-only and `updated_at` triggers)
+  - `0003` seed data (Amazon.in marketplace; a trial plan with **provisional** limits, flagged `features.provisional = true`)
+- Same-tenant composite foreign keys, so a row can't reference another org's row even without RLS.
+- Partial unique indexes:
+  - one live product per ASIN per org
+  - one active scan item per product
+  - one live subscription per org
+  - one pending invite per email
+- `set_tenant_context()` helper (transaction-local settings, safe with connection pooling).
+- Docker: the app-role init script, a one-off `migrate` service, and the API/worker connecting as the restricted role. New `make migrate` / `make migration` targets.
+
+**Verified**
+- 43 backend tests pass (17 unit, 26 integration against real PostgreSQL 16 + Redis), covering:
+  - migrations down to base and back up
+  - models and migrations in sync (autogenerate diff is empty)
+  - every table with `organization_id` has RLS enabled plus a policy (a meta-test, so future tables can't skip it)
+  - the app role is not superuser, can't bypass RLS, owns nothing, and can't UPDATE/DELETE/TRUNCATE snapshots
+  - RLS hides and protects another org's rows with no WHERE clause, blocks inserts into another org, and returns nothing without context
+  - tenant context doesn't leak across transactions on a pooled connection
+  - org-switcher visibility of the user's own memberships
+  - composite FKs block cross-tenant references, even for the owner
+  - the append-only trigger blocks the owner too, with the purge flag as the only exception
+  - duplicate products and concurrent scans are rejected
+  - CHECK constraints work, including unknown metrics stored as NULL (not 0)
+  - the `updated_at` trigger
+- End to end on a fresh database: the init script creates the role, then `alembic upgrade head`, then the API reports `/health/ready` OK as the restricted role. The role gets `permission denied` on CREATE TABLE.
+- ruff and mypy (strict) are clean.
+
+**Not verified / remaining**
+- `docker compose up` (no Docker daemon in the build sandbox); the compose file validates.
+- Trial plan limits are placeholders until pricing is decided (M13).
+- Cross-tenant paths for invitation acceptance (M3) and the scheduler (M6) are designed but not built (see 03-database-design §3.4).

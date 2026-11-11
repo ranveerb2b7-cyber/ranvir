@@ -7,8 +7,8 @@ Marketplace seller mapping and intelligence SaaS for brand owners and manufactur
 | | |
 |---|---|
 | Scope | **Amazon.in only.** Flipkart deferred. |
-| Done | M0 planning, M1 monorepo foundation (health checks, worker skeleton, dashboard shell, CI) |
-| Next | M2 database schema |
+| Done | M0 planning, M1 monorepo foundation, M2 database schema (RLS tenant isolation, append-only snapshots) |
+| Next | M3 authentication, organizations and RBAC |
 
 No business features are complete yet. See [`docs/plan/08-milestones.md`](docs/plan/08-milestones.md) for progress and [`docs/plan/`](docs/plan/README.md) for the design.
 
@@ -43,10 +43,14 @@ make up
 
 API: http://localhost:8000/docs · Web: http://localhost:3000 · Mail: http://localhost:8025
 
-Without Docker (services running locally):
+Without Docker (services running locally; create the app role first, as `infra/docker/postgres/init/01-app-role.sh` does):
 
 ```bash
 make install
+```
+
+```bash
+make migrate  # as the schema owner (MIGRATION_DATABASE_URL)
 ```
 
 ```bash
@@ -67,7 +71,7 @@ Checks:
 make lint typecheck test
 ```
 
-Backend integration tests need `TEST_DATABASE_URL` and `TEST_REDIS_URL`. The Makefile defaults to a local `sellerscope_test` database and Redis DB 15. In CI, integration tests are required to run.
+Backend integration tests need `TEST_DATABASE_URL` (a user with CREATEROLE; the tests drop and recreate the `public` schema of that database) and `TEST_REDIS_URL`. The Makefile defaults to a local `sellerscope_test` database and Redis DB 15. In CI, integration tests are required to run.
 
 ## API
 

@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     database_url: SecretStr = Field(
         default=SecretStr("postgresql+asyncpg://sellerscope:sellerscope@localhost:5432/sellerscope")
     )
+    # Schema owner used only by migrations. The API itself connects as the restricted app
+    # role via DATABASE_URL, which has no DDL rights and is subject to row-level security.
+    migration_database_url: SecretStr | None = None
+    # Name of the restricted role that migrations grant privileges to.
+    app_db_role: str = "sellerscope_app"
+
     redis_url: SecretStr = Field(default=SecretStr("redis://localhost:6379/0"))
 
     # Comma-separated list of allowed browser origins (web app, extension).

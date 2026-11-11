@@ -1,6 +1,6 @@
 # 3. Database Entity-Relationship Design
 
-Status: **PROPOSAL — awaiting approval.** PostgreSQL 16. All PKs are `uuid` (UUIDv7) unless noted. All tables have `created_at timestamptz not null default now()` and `updated_at timestamptz not null default now()` (maintained by trigger). 🔒 means tenant-scoped: it has `organization_id uuid not null` and an RLS policy.
+Status: **Implemented in M2** (migrations `0001`–`0003`). See §3.4 for where the implementation refines this design. PostgreSQL 16. All PKs are `uuid` (UUIDv7) unless noted. All tables have `created_at timestamptz not null default now()` and `updated_at timestamptz not null default now()` (maintained by trigger). 🔒 means tenant-scoped: it has `organization_id uuid not null` and an RLS policy.
 
 ## 3.1 ER overview
 
@@ -199,3 +199,60 @@ marketplaces (global reference data, not tenant-owned)
 - Composite FKs `(organization_id, id)` on child→parent relations within a tenant (e.g. `product_offers(organization_id, scan_result_id) → scan_results(organization_id, id)`). This makes it impossible at the DB level for a row to reference another tenant's row.
 - Snapshot tables (`scan_results`, `product_offers`, `scan_history`, `audit_logs`) are append-only. Retention is handled by monthly partitioning on `created_at` (introduced when volume requires it), and old partitions are dropped according to plan retention.
 - `total_offer_count`, `observed_offer_count` and `unique_seller_count` are separate columns and are never derived from one another in the UI.
+
+## 3.4 Implementation notes (M2)
+
+Source of truth: `apps/api/src/sellerscope/models/` and `apps/api/migrations/versions/`. A test fails if the two drift apart.
+
+**Refinements to the design above:**
+- **Amazon-only scope:**
+  - Only `amazon_in` is seeded.
+  - `connection_type` allows `sp_api_oauth` and `sp_api_self_auth`.
+  - `fulfilment_channel` allows `amazon`, `merchant` and `unknown`.
+- **`scan_frequency` / `min_scan_interval`:** stored as integer minutes instead of `interval`.
+- **New `scan_results` columns:**
+  - `offer_count_breakdown` (jsonb): Amazon `Summary.NumberOfOffers`.
+  - `error_code`.
+- **`seller_profiles.is_amazon_retail`** became `is_marketplace_retail`. There is also a `notes` column, and a CHECK that a `display_name` always has a `display_name_source`.
+- **`invitations.revoked_at`** was added. The pending-invite uniqueness excludes revoked invites.
+- **`audit_logs`:**
+  - `metadata` is named `details` (`metadata` is reserved by SQLAlchemy).
+  - `actor_user_id` is deliberately **not** a foreign key, so audit rows outlive deleted users and never need an UPDATE.
+- **Nullable composite FKs** use `ON DELETE NO ACTION`. Products are soft-deleted, so hard deletes of referenced rows are rare.
+- **Extra CHECK constraints:**
+  - normalized uppercase identifiers
+  - non-negative counters
+  - `lowest_observed_price <= highest_observed_price`
+  - prices require a currency
+  - `unique_seller_count <= observed_offer_count`
+  - an encrypted secret requires its key id
+- **Primary keys** are UUIDv7, generated in Python (`sellerscope.core.ids.uuid7`).
+
+**Database roles:**
+
+| Role | Used by | Rights |
+|---|---|---|
+| owner (`POSTGRES_USER` / `MIGRATION_DATABASE_URL`) | `alembic upgrade head` only | Owns all tables; not subject to RLS |
+| app (`APP_DB_ROLE`, default `sellerscope_app`) | API and workers (`DATABASE_URL`) | `NOSUPERUSER NOBYPASSRLS`, no DDL. CRUD on mutable tables; `SELECT, INSERT` only on append-only tables; `SELECT` only on `marketplaces`/`plans` |
+
+The app role must exist before migrating. Docker creates it via `infra/docker/postgres/init/01-app-role.sh`. In other environments, ops create it.
+
+**Row-level security.** The policies read two transaction-local settings, set via `sellerscope.db.tenant.set_tenant_context()`:
+
+| Table(s) | Read | Write |
+|---|---|---|
+| 18 tenant tables | `organization_id = current org` | same |
+| `organization_members` | current org **or** the user's own memberships (org switcher) | current org only |
+| `organizations` | current org **or** orgs the user belongs to | current org only (create = set context to the new org's id first) |
+| `users` | yourself **or** members of the current org | yourself only |
+
+With no context set, tenant queries return no rows.
+
+**Append-only enforcement** applies to `scan_results`, `product_offers`, `scan_history` and `audit_logs`, in two layers:
+1. The app role has no UPDATE/DELETE grant.
+2. A trigger rejects UPDATE and DELETE for every role, including the owner. The only exception is DELETE inside a transaction that sets `app.retention_purge = 'on'`, for owner-run retention jobs.
+
+**Deferred to later milestones:**
+- **M3, invitation acceptance:** an invitee isn't yet a member, so looking up an invitation by token crosses tenants. This will use a narrowly scoped `SECURITY DEFINER` function.
+- **M6, scheduler:** Celery beat must find due products across all orgs. This will use a dedicated role or `SECURITY DEFINER` function that returns only `(organization_id, product_id)` pairs.
+- **Volume:** partitioning of snapshot tables is deferred until data volume requires it.

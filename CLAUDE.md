@@ -22,7 +22,15 @@ Amazon.in only (decided 2026-11-11). Flipkart is deferred. Keep connector code m
 - `apps/web`: Next.js 16 App Router, Tailwind 4. Screens live under `src/app/(app)/`. Nav is defined in `src/lib/navigation.ts`.
 - Target structure: docs/plan/04-folder-structure.md.
 
+## Database
+- Models live in `apps/api/src/sellerscope/models/`. After changing them, run `make migration m="..."`, then review the generated file.
+  - asyncpg allows **one SQL statement per `op.execute`**.
+  - Autogenerate can't render circular FKs; add those with `op.create_foreign_key` after both tables exist.
+- New tenant tables need: the `TenantOwned` mixin, `tenant_unique(...)`, `tenant_fk(...)` for same-tenant references, plus an RLS policy and grants in a migration. `test_every_tenant_table_has_rls_and_a_policy` enforces this.
+- The API connects as the restricted app role. Always call `set_tenant_context()` inside the transaction before tenant queries.
+
 ## Commands
+- `make migrate`: apply migrations as the owner (`MIGRATION_DATABASE_URL`)
 - `make install`, `make lint`, `make typecheck`, `make test`, `make build-web`
 - Backend only: `cd apps/api && uv run pytest`. Integration tests need `TEST_DATABASE_URL` and `TEST_REDIS_URL`.
 - Web only: `pnpm web:test`, `pnpm web:lint`, `pnpm web:typecheck`

@@ -3,7 +3,7 @@ API := apps/api
 TEST_DATABASE_URL ?= postgresql+asyncpg://sellerscope:sellerscope@127.0.0.1:5432/sellerscope_test
 TEST_REDIS_URL ?= redis://127.0.0.1:6379/15
 
-.PHONY: help install up down api worker web lint typecheck test test-api test-web build-web
+.PHONY: help install up down migrate migration api worker web lint typecheck test test-api test-web build-web
 
 help:
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -17,6 +17,12 @@ up: ## Start the full stack in Docker
 
 down: ## Stop the Docker stack
 	docker compose down
+
+migrate: ## Apply database migrations (uses MIGRATION_DATABASE_URL)
+	cd $(API) && uv run alembic upgrade head
+
+migration: ## Create a migration: make migration m="describe change"
+	cd $(API) && uv run alembic revision --autogenerate -m "$(m)"
 
 api: ## Run the API locally with reload
 	cd $(API) && uv run uvicorn sellerscope.asgi:app --reload --port 8000
