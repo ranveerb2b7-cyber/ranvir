@@ -14,5 +14,19 @@
 - Work milestone by milestone (docs/plan/08-milestones.md). Before a milestone: plan, dependencies, limitations, credentials, acceptance tests. After: run tests, fix, verify, update docs, report what's done and what remains.
 - Don't mark incomplete functionality as finished.
 
+## Scope
+Amazon.in only (decided 2026-11-11). Flipkart is deferred. Keep connector code marketplace-agnostic, but don't build Flipkart features.
+
 ## Layout
-See docs/plan/04-folder-structure.md. (Commands are added here as M1 is built.)
+- `apps/api`: FastAPI + Celery, package `sellerscope` under `src/`. Tests in `tests/unit` and `tests/integration` (marked `integration`).
+- `apps/web`: Next.js 16 App Router, Tailwind 4. Screens live under `src/app/(app)/`. Nav is defined in `src/lib/navigation.ts`.
+- Target structure: docs/plan/04-folder-structure.md.
+
+## Commands
+- `make install`, `make lint`, `make typecheck`, `make test`, `make build-web`
+- Backend only: `cd apps/api && uv run pytest`. Integration tests need `TEST_DATABASE_URL` and `TEST_REDIS_URL`.
+- Web only: `pnpm web:test`, `pnpm web:lint`, `pnpm web:typecheck`
+
+## Conventions
+- Python: ruff (line length 100), mypy strict, Pydantic v2, async SQLAlchemy 2. Errors are RFC 9457 problem+json via `AppError`.
+- TS: strict + `noUncheckedIndexedAccess`. Use `MetricTile` with `value={null}` for unavailable metrics.

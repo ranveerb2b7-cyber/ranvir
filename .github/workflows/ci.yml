@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sellerscope
+          POSTGRES_PASSWORD: sellerscope
+          POSTGRES_DB: sellerscope_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sellerscope" --health-interval 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://sellerscope:sellerscope@localhost:5432/sellerscope_test
+      TEST_REDIS_URL: redis://localhost:6379/15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy src
+      - name: Tests (integration tests must run, not skip)
+        run: |
+          set -o pipefail
+          uv run pytest -rs | tee pytest.log
+          if grep -q "SKIPPED" pytest.log; then echo "Integration tests were skipped" && exit 1; fi
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm web:lint
+      - run: pnpm web:typecheck
+      - run: pnpm web:test
+      - run: pnpm web:build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose --env-file .env.example config --quiet

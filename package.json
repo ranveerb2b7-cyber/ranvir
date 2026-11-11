@@ -1,0 +1,13 @@
+{
+  "name": "sellerscope",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "web:dev": "pnpm --filter @sellerscope/web dev",
+    "web:build": "pnpm --filter @sellerscope/web build",
+    "web:lint": "pnpm --filter @sellerscope/web lint",
+    "web:typecheck": "pnpm --filter @sellerscope/web typecheck",
+    "web:test": "pnpm --filter @sellerscope/web test"
+  }
+}
