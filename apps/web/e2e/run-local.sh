@@ -81,10 +81,16 @@ for url in http://localhost:8000/api/v1/health/ready http://localhost:3100/login
   curl -sf -o /dev/null "$url" || { echo "not ready: $url (see $WORK/logs)"; exit 1; }
 done
 
+echo "› extension build"
+(cd "$ROOT/apps/extension" && EXTENSION_API_URL=http://localhost:8000/api/v1 EXTENSION_WEB_URL=http://localhost:3100 \
+  node build.mjs >"$WORK/logs/extension-build.log" 2>&1)
+export E2E_EXTENSION_DIR="$ROOT/apps/extension/dist"
+
 echo "› e2e"
 export E2E_BASE_URL=http://localhost:3100 E2E_API_URL=http://localhost:8000/api/v1 \
   E2E_AUTH_URL=http://127.0.0.1:9999/auth/v1 E2E_MAILDIR="$WORK/maildir" E2E_SCREENSHOTS="$WORK/shots"
 export E2E_WORKDIR="$WORK"
 (cd "$WEB" && node e2e/accounts.e2e.mjs && node e2e/products.e2e.mjs && node e2e/uploads.e2e.mjs \
-  && node e2e/scans.e2e.mjs && node e2e/intel.e2e.mjs && node e2e/alerts.e2e.mjs && node e2e/reports.e2e.mjs)
+  && node e2e/scans.e2e.mjs && node e2e/intel.e2e.mjs && node e2e/alerts.e2e.mjs && node e2e/reports.e2e.mjs \
+  && node e2e/extension.e2e.mjs)
 echo "logs and screenshots: $WORK"

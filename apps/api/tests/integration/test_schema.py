@@ -174,7 +174,7 @@ async def test_every_tenant_table_has_rls_and_a_policy(owner_engine: AsyncEngine
             )
         ).all()
     state = {name: (rls, policies) for name, rls, policies in rows}
-    assert len(tenant_tables) == 19
+    assert len(tenant_tables) == 20
     for table in tenant_tables | {"users", "organizations"}:
         rls, policies = state[table]
         assert rls, f"RLS not enabled on {table}"

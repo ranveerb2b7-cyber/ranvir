@@ -36,6 +36,7 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 | M8 | ✅ Complete (before M7, on MOCK data) | See "M8 report" below |
 | M10 | ✅ Complete: in-app + email. Signed webhooks moved to M7. | See "M10 report" below |
 | M11 | ✅ Complete: authenticated downloads instead of signed URLs (see report) | See "M11 report" below |
+| M12 | ✅ Complete: not yet published to the Chrome Web Store | See "M12 report" below |
 | M9 | ⏸ Deferred | Flipkart out of current scope |
 | M7 | ⏳ Waiting for Amazon credentials | |
 | Others | Not started | |
@@ -467,3 +468,67 @@ Built before M7, on MOCK data. Rules read the scan results and change events tha
   - per-report column choice
   - PDF output
 - **No real Amazon data yet:** reports contain MOCK data until M7.
+
+### M12 report (2026-11-12)
+
+**Delivered**
+- **Chrome MV3 extension** (`apps/extension`, TypeScript + esbuild, no framework):
+  - The popup shows stored data for the Amazon.in product in the current tab: "data as of", reported/observed/unique counts, lowest and Buy Box price, plain-language notes, and a MOCK badge. Unknown values show as "Not available".
+  - "Check now" polls until the scan finishes.
+  - It handles untracked products (link to add them), non-product pages, short links and other Amazon sites.
+  - The toolbar badge marks product pages.
+  - A "Disconnect" link revokes the token.
+  - "Remember this browser" switches token storage from session to local.
+- **Privacy:**
+  - Only the tab URL is used. The ASIN is parsed locally and only the ASIN is sent.
+  - **No content script.** This is stricter than the plan: Chrome exposes the URL for sites the extension has access to, so nothing is injected into pages.
+  - Permissions are only `storage`, plus amazon.in and the API origin.
+  - No remote code.
+- **Pairing:**
+  - A one-time 8-character code shown on the web after a signed-in member approves. It is stored hashed, valid 10 minutes, usable once, and bound to the extension's PKCE S256 challenge.
+  - Redemption is rate-limited per IP.
+  - The resulting token is opaque, 256-bit and SHA-256-stored. It has the scopes `extension:read` and `extension:check`, lasts 90 days, and is re-validated against active membership on every request.
+- **API:**
+  - pair start/complete, me, lookup (stored data only; no marketplace call), check (a normal scan job, `trigger=extension`, with quota and `scans.run`), self-disconnect
+  - token list and revoke on the web
+  - Pairing, connect, revoke, disconnect and extension-started scans are audited, with `actor_type=extension` where applicable.
+- **Database:**
+  - migration 0009: `extension_pairings` (RLS)
+  - two SECURITY DEFINER functions that resolve a code or token hash without an organization context
+- **Web:**
+  - the `/extension/connect` approval page, which shows the organization, the device, what the extension can do, and the code
+  - a Settings → Browser extension list with Disconnect (admins see all members' connections)
+
+**Verified**
+- **Backend: 286 tests pass.** The 8 extension tests cover:
+  - the code is one-time, refuses the wrong verifier and expired codes, and accepts case/dash variants
+  - only hashes are stored
+  - tokens work only on extension routes, and web tokens aren't accepted there
+  - lookup values, with nulls for not-found products and invalid/short-link inputs
+  - Check now: scan trigger, 409 while running, 404 if untracked, 403 for viewers, audit rows
+  - revocation from the web, member removal, self-disconnect and expiry
+  - `last_used_at` is recorded; members see only their own tokens
+  - an org-A token can't see or check org-B products, and the org header is ignored
+  - the per-IP limit on redeeming codes
+  - the functions are SECURITY DEFINER and not executable by PUBLIC
+- **Cross-tenant matrix:** 64 organization-scoped routes (3 new). The 5 token routes are listed as non-org routes with dedicated tests.
+- **Extension: 18 unit tests pass** (URL corpus: 9 product forms, 7 Amazon.in non-product pages, look-alike hosts, other Amazon sites, short links, non-http; plus PKCE).
+- **Web: 44 unit tests pass.**
+- **Browser end-to-end: 7 new steps pass (69 total).** The real unpacked extension runs in Chromium:
+  - the manifest permission review
+  - the badge, and that nothing is injected into the page
+  - pairing through the web, including a wrong code
+  - lookup, then Check now completed by the Celery worker
+  - untracked and non-product pages
+  - only the ASIN is sent to the API
+  - revoke from Settings disconnects the popup
+  - Amazon pages are served locally, so nothing goes to Amazon
+- **Bugs fixed while testing:**
+  - `last_used_at` was never saved, because read-only requests rolled back. It's now committed when the token is checked.
+  - Adding the extension package changed dependency resolution and broke the web test type definitions; fixed in the web `tsconfig`.
+
+**Not verified / remaining**
+- **Chrome Web Store:** not published. Needs icons and listing assets, a privacy policy URL, a production build, and a Chrome Web Store developer account.
+- **Real Chrome window:** the toolbar popup itself isn't opened by the e2e test; the test opens `popup.html` as a page, with the tab chosen by a test parameter. The logic is identical, but popup sizing in real Chrome was checked visually only from screenshots.
+- **Not built:** Flipkart detection (out of scope); adding a product from the extension (it links to SellerScope instead).
+- **No real Amazon data yet:** data is MOCK until M7.

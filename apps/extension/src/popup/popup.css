@@ -1,0 +1,72 @@
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --surface: #f6f7f9;
+  --text: #16181d;
+  --muted: #5b6270;
+  --border: #dde1e7;
+  --brand: #2a58d6;
+  --brand-text: #ffffff;
+  --error: #b42318;
+  --mock-bg: #d92d20;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171c;
+    --surface: #1d2027;
+    --text: #eceef2;
+    --muted: #a3aab8;
+    --border: #2e333d;
+    --brand: #5b84f0;
+    --brand-text: #0b0d12;
+    --error: #f97066;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  width: 360px;
+  min-height: 160px;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+main { padding: 12px 14px 14px; }
+h1 { font-size: 14px; margin: 0 0 2px; }
+p { margin: 0 0 8px; }
+.muted { color: var(--muted); }
+.mono { font-family: ui-monospace, monospace; }
+.error { color: var(--error); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.stack > * + * { margin-top: 10px; }
+button, .button {
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 6px; padding: 7px 12px; font: inherit; font-weight: 600;
+  background: var(--brand); color: var(--brand-text); cursor: pointer; text-decoration: none;
+}
+button.secondary, .button.secondary {
+  background: var(--surface); color: var(--text); border: 1px solid var(--border);
+}
+button.link { background: none; color: var(--muted); padding: 0; font-weight: 400; text-decoration: underline; }
+button:disabled { opacity: 0.6; cursor: default; }
+input[type="text"] {
+  width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); color: var(--text); font: inherit; letter-spacing: 0.08em;
+}
+dl { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 0; }
+dt { color: var(--muted); }
+dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.na { color: var(--muted); font-style: italic; }
+.badge {
+  display: inline-block; border-radius: 4px; padding: 0 5px; font-size: 11px; font-weight: 700;
+  background: var(--mock-bg); color: #fff;
+}
+.notes { margin: 0; padding-left: 16px; color: var(--muted); }
+.card { border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--surface); }

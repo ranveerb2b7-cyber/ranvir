@@ -34,6 +34,13 @@ NON_ORG_ROUTES = {
     ("POST", "/api/v1/invitations/accept"),
     ("GET", "/api/v1/uploads/template"),  # static file, no organization data
     ("GET", "/api/v1/meta"),  # public runtime facts (environment, mock mode)
+    # Browser extension: the token carries its organization (cross-tenant tests in
+    # test_api_extension.py); pair/complete is public and PKCE-bound.
+    ("POST", "/api/v1/extension/pair/complete"),
+    ("GET", "/api/v1/extension/me"),
+    ("GET", "/api/v1/extension/lookup"),
+    ("POST", "/api/v1/extension/check"),
+    ("DELETE", "/api/v1/extension/session"),
 }
 
 # Minimal valid bodies so requests are not rejected by validation before authorization.
@@ -52,6 +59,7 @@ BODIES: dict[tuple[str, str], dict[str, Any]] = {
     ("PATCH", "/api/v1/alert-rules/{rule_id}"): {"name": "Hijacked", "is_enabled": False},
     ("POST", "/api/v1/alerts/bulk"): {"ids": ["{alert_id}"], "action": "resolve"},
     ("POST", "/api/v1/reports"): {"report_type": "product", "format": "csv"},
+    ("POST", "/api/v1/extension/pair/start"): {"code_challenge": "C" * 43},
 }
 
 
@@ -178,6 +186,14 @@ async def _report(client: AsyncClient, user: AppUser, org: str) -> str:
     return str(r.json()["id"])
 
 
+async def _ext_token(client: AsyncClient, user: AppUser, org: str) -> str:
+    from tests.integration.test_api_extension import pair
+
+    await pair(client, user, org)
+    tokens = (await client.get("/api/v1/extension/tokens", headers=user.headers(org))).json()
+    return str(tokens[0]["id"])
+
+
 async def _setup(client: AsyncClient, mailer: RecordingMailer) -> dict[str, Any]:
     alice, alice_member, bob, bob_member = (AppUser(n) for n in ("alice", "am", "bob", "bm"))
     org_a = await make_org(client, alice, "Org A")
@@ -213,6 +229,7 @@ async def _setup(client: AsyncClient, mailer: RecordingMailer) -> dict[str, Any]
             "seller_id": await _seller(client, alice, org_a),
             "alert_id": await _alert(client, alice, org_a),
             "report_id": await _report(client, alice, org_a),
+            "token_id": await _ext_token(client, alice, org_a),
         },
         "b_ids": {
             "user_id": str(bob_member.id),
@@ -224,6 +241,7 @@ async def _setup(client: AsyncClient, mailer: RecordingMailer) -> dict[str, Any]
             "seller_id": await _seller(client, bob, org_b),
             "alert_id": await _alert(client, bob, org_b),
             "report_id": await _report(client, bob, org_b),
+            "token_id": await _ext_token(client, bob, org_b),
         },
     }
 
@@ -239,6 +257,7 @@ async def _snapshot(client: AsyncClient, user: AppUser, org: str) -> tuple[Any, 
     rules = (await client.get("/api/v1/alert-rules", headers=user.headers(org))).json()["items"]
     alerts = (await client.get("/api/v1/alerts", headers=user.headers(org))).json()["items"]
     reports = (await client.get("/api/v1/reports", headers=user.headers(org))).json()["items"]
+    tokens = (await client.get("/api/v1/extension/tokens", headers=user.headers(org))).json()
     return (
         org_body["name"],
         sorted((m["user_id"], m["role"], m["status"]) for m in members),
@@ -250,6 +269,7 @@ async def _snapshot(client: AsyncClient, user: AppUser, org: str) -> tuple[Any, 
         sorted((r["id"], r["name"], r["is_enabled"]) for r in rules),
         sorted((a["id"], a["status"], tuple(d["status"] for d in a["deliveries"])) for a in alerts),
         sorted((r["id"], r["status"]) for r in reports),
+        sorted((t["id"], t["revoked_at"]) for t in tokens),
     )
 
 

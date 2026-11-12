@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
+import { ExtensionDevices } from "@/components/extension/devices";
 import { useSession } from "@/components/session/session-provider";
 import { Alert, Button, errorMessage, Field, Input } from "@/components/ui/form";
 import { api } from "@/lib/api";
@@ -102,6 +103,8 @@ export default function SettingsPage() {
           <p className="text-xs text-[var(--text-muted)]">Only owners and admins can rename the organization.</p>
         )}
       </form>
+
+      <ExtensionDevices orgId={org.id} seesAll={can("members.manage")} />
 
       <div className="space-y-3 rounded-lg border border-red-300 p-4 dark:border-red-900">
         <h2 className="font-semibold text-red-700 dark:text-red-400">Danger zone</h2>

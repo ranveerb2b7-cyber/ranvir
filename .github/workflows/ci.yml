@@ -66,6 +66,9 @@ jobs:
       - run: pnpm web:build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+      - run: pnpm extension:typecheck
+      - run: pnpm extension:test
+      - run: pnpm extension:build
 
   e2e:
     runs-on: ubuntu-latest

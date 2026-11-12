@@ -255,6 +255,7 @@ def api_settings(**overrides: Any) -> Settings:
         "auth_jwt_secret": AUTH_SECRET,
         "web_base_url": WEB_BASE,
         "rate_limit_ip_per_minute": 100_000,
+        "extension_pair_ip_per_minute": 100_000,
         "storage_backend": "local",
         "storage_local_dir": _STORAGE_DIR,
         "enable_mock_connector": True,

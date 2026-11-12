@@ -85,6 +85,12 @@ class Settings(BaseSettings):
     # Queued + running exports allowed per organization at once.
     report_max_active: int = Field(default=3, gt=0)
 
+    # ---- Browser extension ----
+    extension_token_days: int = Field(default=90, ge=1)
+    extension_pairing_ttl_s: int = Field(default=600, ge=60)
+    # Attempts to redeem a pairing code, per client IP per minute (brute-force guard).
+    extension_pair_ip_per_minute: int = Field(default=10, gt=0)
+
     # ---- Alert email delivery ----
     alert_delivery_max_attempts: int = Field(default=5, ge=1)
     # Retry n waits base * 2^(n-1) seconds, capped at one hour.

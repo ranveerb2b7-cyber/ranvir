@@ -545,3 +545,24 @@ export interface ReportExport {
 export interface ReportPage extends Page<ReportExport> {
   retention_days: number;
 }
+
+// ---- Browser extension (M12) ----
+
+export interface ExtensionPairing {
+  pairing_code: string;
+  expires_at: string;
+  organization_name: string;
+}
+
+export interface ExtensionDevice {
+  id: string;
+  name: string | null;
+  user_id: string;
+  user_email: string | null;
+  scopes: string[];
+  created_at: string;
+  last_used_at: string | null;
+  expires_at: string;
+  revoked_at: string | null;
+  is_current_user: boolean;
+}

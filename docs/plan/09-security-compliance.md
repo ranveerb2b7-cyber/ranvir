@@ -70,6 +70,12 @@ Status: **PROPOSAL — awaiting approval.**
 - The content script only reads `location.href` to detect ASIN/FSN. **It doesn't read or transmit page content, automate clicks, or interact with logins or CAPTCHAs.**
 - The token lives in `chrome.storage.session` (cleared on browser restart) or in `storage.local`, with an explicit "remember this device" choice. No remote code (an MV3 requirement).
 
+**As built (M12):**
+- **No content script.** The popup and service worker read only the active tab's URL, which Chrome exposes for hosts in `host_permissions`. Nothing is injected into Amazon pages. This is stricter than the plan above.
+- **Permissions:** only `storage`, plus host access to amazon.in and the API origin. There's no Flipkart host while Flipkart is out of scope.
+- **No CORS change:** extension pages with host permissions are exempt from CORS, so the API's CORS allow-list is unchanged.
+- **Pairing:** one-time code + PKCE (S256). The code is useless without the verifier held by the extension that started pairing.
+
 ## 9.8 Marketplace compliance
 - **Amazon:** SP-API only, under the Acceptable Use Policy and Data Protection Policy (encryption, access control, logging, incident response within the required window, data deletion on deauthorization). Legal review is needed before the public Appstore submission.
 - **Flipkart:** authorized APIs only. No scraping, no reverse-engineered mobile APIs, no CAPTCHA or bot-detection bypass.

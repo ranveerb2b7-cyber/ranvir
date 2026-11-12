@@ -3,7 +3,7 @@ API := apps/api
 TEST_DATABASE_URL ?= postgresql+asyncpg://sellerscope:sellerscope@127.0.0.1:5432/sellerscope_test
 TEST_REDIS_URL ?= redis://127.0.0.1:6379/15
 
-.PHONY: help install up down migrate migration api worker web lint typecheck test test-api test-web test-e2e build-web
+.PHONY: help install up down migrate migration api worker web lint typecheck test test-api test-web test-e2e build-web test-extension build-extension
 
 help:
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -40,8 +40,9 @@ lint: ## Lint everything
 typecheck: ## Type-check everything
 	cd $(API) && uv run mypy src
 	pnpm web:typecheck
+	pnpm extension:typecheck
 
-test: test-api test-web ## Run all tests
+test: test-api test-web test-extension ## Run all tests
 
 test-api: ## Backend tests (integration tests need Postgres + Redis)
 	cd $(API) && TEST_DATABASE_URL=$(TEST_DATABASE_URL) TEST_REDIS_URL=$(TEST_REDIS_URL) uv run pytest
@@ -54,3 +55,9 @@ test-e2e: ## Browser end-to-end test against a throwaway local stack (needs Post
 
 build-web: ## Production build of the web app
 	pnpm web:build
+
+test-extension: ## Chrome extension unit tests (URL detection corpus, PKCE)
+	pnpm extension:test
+
+build-extension: ## Build the unpacked Chrome extension into apps/extension/dist (EXTENSION_API_URL, EXTENSION_WEB_URL)
+	pnpm extension:build

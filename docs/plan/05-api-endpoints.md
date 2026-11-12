@@ -197,13 +197,22 @@ Implemented in M11. Every active member may export their organization's data. Ex
   - XLSX: text cells are typed as strings, so they're never evaluated as formulas.
 
 ## Chrome extension
-| Method | Path | Purpose | Perm |
+Implemented in M12. Extension routes authenticate with an extension token (`Authorization: Bearer sse_…`), which carries its own organization; `X-Organization-Id` is ignored.
+
+| Method | Path | Purpose | Auth |
 |---|---|---|---|
-| POST | /extension/pair/start | From a logged-in web session: issue a one-time pairing code | authenticated |
-| POST | /extension/pair/complete | Extension exchanges code (+PKCE verifier) for a scoped, revocable token | public, rate-limited |
-| GET | /extension/lookup?marketplace=&id= | Last stored snapshot + timestamp + dashboard URL | ext token |
-| POST | /extension/check | Enqueue a scan via the official connector (quota applies) | ext token, scans.run |
-| GET/DELETE | /extension/tokens[/{id}] | Manage paired devices | authenticated |
+| POST | /extension/pair/start | `{code_challenge (S256), device_name}`: a signed-in member approves on the web and gets a one-time code (8 characters, valid 10 minutes) | web session, org member |
+| POST | /extension/pair/complete | `{pairing_code, code_verifier}` → `{token, expires_at, scopes, organization}`. The token is shown once. | public, PKCE-bound, per-IP limited (10/min) |
+| GET | /extension/me | The connection's organization, email, role, and whether it can start checks | ext token |
+| GET | /extension/lookup?marketplace=amazon_in&id= | Stored latest snapshot (null figures when unknown), last attempt, active scan, dashboard URL. `id` is an ASIN or product URL. | ext token, `extension:read` |
+| POST | /extension/check | `{marketplace, id}`: queues a normal scan (`trigger=extension`; quota and the `scans.run` role apply). 404 if the product isn't tracked; 409 if a scan is already running. | ext token, `extension:check` |
+| DELETE | /extension/session | The extension's "Disconnect" (revokes its own token) | ext token |
+| GET | /extension/tokens | Connected browsers: your own, or everyone's for admins | web session, org member |
+| DELETE | /extension/tokens/{id} | Revoke (your own, or any as an admin) | web session, org member |
+
+**Token rules:**
+- Tokens are stored only as SHA-256 hashes, last 90 days, and are re-checked on every request against the member's active membership. A removed member's tokens stop working at once.
+- Two SECURITY DEFINER functions (migration 0009) resolve a pairing code or a token hash without an organization context. They take only hashes and return only the matching row.
 
 ## Billing (later milestone)
 `GET /billing/plans`, `GET /billing/subscription`, `POST /billing/checkout`, `POST /billing/webhook` (provider-signature verified).

@@ -62,6 +62,15 @@ web app in Chromium:
 - the scan summary report, and the error shown for an invalid date range
 - deleting a report, and the page at phone width
 
+`extension.e2e.mjs` runs the built extension (`apps/extension/dist`, built by `run-local.sh`) in Chromium. It covers:
+- the manifest permission review
+- the badge on an Amazon.in product page, served locally by Playwright routing, with no network to Amazon
+- pairing: approve on the web, a wrong code, then the right code
+- lookup with "Not scanned yet", then "Check now" processed by the worker
+- untracked and non-product pages
+- that only the ASIN is sent to the API
+- revocation from Settings
+
 ## What the stub does not prove
 
 The stub implements only the endpoints our flows call: sign-up (auto-confirmed), password sign-in, refresh, get/update user, recover, logout. It signs HS256 tokens the same way GoTrue does.

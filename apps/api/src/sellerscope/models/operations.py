@@ -214,6 +214,31 @@ class ExtensionToken(UUIDPk, TenantOwned, Timestamps, Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class ExtensionPairing(UUIDPk, TenantOwned, Timestamps, Base):
+    """A one-time code a signed-in member approves on the web to connect a browser extension.
+
+    The code is stored hashed and is bound to the extension's PKCE challenge, so seeing the
+    code is not enough to redeem it. Redeemed codes and expired codes can't be used again.
+    """
+
+    __tablename__ = "extension_pairings"
+    __table_args__ = (
+        tenant_unique("extension_pairings"),
+        UniqueConstraint("code_hash"),
+        CheckConstraint("char_length(code_challenge) BETWEEN 43 AND 128", name="challenge_length"),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    code_hash: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    code_challenge: Mapped[str] = mapped_column(Text, nullable=False)  # S256, base64url
+    device_name: Mapped[str | None] = mapped_column(Text)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    extension_token_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+
+
 class AuditLog(UUIDPk, TenantOwned, CreatedAt, Base):
     """Append-only. actor_user_id is deliberately not a FK so records outlive users."""
 

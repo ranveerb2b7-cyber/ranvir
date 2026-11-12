@@ -8,6 +8,7 @@ from sellerscope.models.operations import (
     AlertDelivery,
     AlertRule,
     AuditLog,
+    ExtensionPairing,
     ExtensionToken,
     ReportExport,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "AlertDelivery",
     "AlertRule",
     "AuditLog",
+    "ExtensionPairing",
     "ExtensionToken",
     "Invitation",
     "Marketplace",

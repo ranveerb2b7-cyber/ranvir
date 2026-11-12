@@ -20,6 +20,7 @@ Amazon.in only (decided 2026-11-11). Flipkart is deferred. Keep connector code m
 ## Layout
 - `apps/api`: FastAPI + Celery, package `sellerscope` under `src/`. Tests in `tests/unit` and `tests/integration` (marked `integration`).
 - `apps/web`: Next.js 16 App Router, Tailwind 4. Screens live under `src/app/(app)/`. Nav is defined in `src/lib/navigation.ts`.
+- `apps/extension`: Chrome MV3 extension (`pnpm extension:build|test|typecheck`).
 - Target structure: docs/plan/04-folder-structure.md.
 
 ## Database
@@ -55,6 +56,7 @@ Amazon.in only (decided 2026-11-11). Flipkart is deferred. Keep connector code m
   - Never fire or resolve on unknown data. Inconclusive events alert only when the rule opts in.
   - Email goes through `alert_deliveries` and `alerts/delivery.py` after commit (one digest per recipient). Failures are recorded per delivery and retried, then shown in the UI.
 - **Reports (M11):** builders in `reports/builders.py` (one per type, tenant context, read-only transaction); files via `reports/writers.py` (blank cells for unknowns + a Notes column; never write user text as an XLSX formula; CSV via `csv_safe`). Generation runs in the `reports` queue; failures are recorded on `report_exports`.
+- **Browser extension (M12):** `apps/extension` (MV3, esbuild, no framework). Only the tab URL is used (`src/lib/detect.ts` mirrors `connectors/identifiers.py`); no content scripts, no new permissions without review. Extension API routes use `ExtensionDep` (`extension/auth.py`), not `OrgDep`; they're listed in `NON_ORG_ROUTES` and have their own cross-tenant tests in `test_api_extension.py`.
 - **Files:** go through `app.state.storage` (`sellerscope.storage`). Use app-generated keys only; never user file names.
 - Charts: `components/charts/trend-chart.tsx` (one y-axis, validated `--series-1..3` tokens, gaps for null, table view). Load the dataviz skill before changing charts.
 - Web data fetching uses TanStack Query. Tenant data query keys start with `["tenant", orgId, ...]`.

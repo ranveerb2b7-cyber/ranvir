@@ -2,12 +2,17 @@
   "name": "sellerscope",
   "private": true,
   "packageManager": "pnpm@10.28.0",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "web:dev": "pnpm --filter @sellerscope/web dev",
     "web:build": "pnpm --filter @sellerscope/web build",
     "web:lint": "pnpm --filter @sellerscope/web lint",
     "web:typecheck": "pnpm --filter @sellerscope/web typecheck",
-    "web:test": "pnpm --filter @sellerscope/web test"
+    "web:test": "pnpm --filter @sellerscope/web test",
+    "extension:build": "pnpm --filter @sellerscope/extension build",
+    "extension:test": "pnpm --filter @sellerscope/extension test",
+    "extension:typecheck": "pnpm --filter @sellerscope/extension typecheck"
   }
 }
