@@ -27,7 +27,7 @@ class ConnectorRegistry:
         # Settings already refuses ENABLE_MOCK_CONNECTOR in staging/production; this is a
         # second, independent guard.
         self._mock = (
-            MockConnector()
+            MockConnector(settings.mock_epoch_seconds)
             if settings.enable_mock_connector and not settings.is_production_like
             else None
         )

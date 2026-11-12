@@ -52,7 +52,7 @@ pids+=($!)
 (cd "$WEB" && STUB_JWT_SECRET="$SECRET" STUB_PORT=9999 exec node e2e/stub-auth.mjs) >"$WORK/logs/stub.log" 2>&1 &
 pids+=($!)
 export STORAGE_BACKEND=local STORAGE_LOCAL_DIR="$WORK/storage"
-API_ENV=(APP_ENV=development ENABLE_MOCK_CONNECTOR=true
+API_ENV=(APP_ENV=development ENABLE_MOCK_CONNECTOR=true MOCK_EPOCH_SECONDS=5
   DATABASE_URL="postgresql+asyncpg://$APP_ROLE:$APP_PW@$PG_HOSTPORT/$DB" REDIS_URL="$REDIS_URL"
   AUTH_JWT_ISSUER=http://127.0.0.1:9999/auth/v1 AUTH_JWT_SECRET="$SECRET"
   WEB_BASE_URL=http://localhost:3100 CORS_ORIGINS=http://localhost:3100 SMTP_HOST=127.0.0.1 SMTP_PORT=1025)
@@ -60,7 +60,7 @@ API_ENV=(APP_ENV=development ENABLE_MOCK_CONNECTOR=true
 (cd "$API" && exec env "${API_ENV[@]}" uv run celery -A sellerscope.workers.celery_app worker \
   -Q imports,scans.amazon,default -c 2 --loglevel=INFO) >"$WORK/logs/worker.log" 2>&1 &
 pids+=($!)
-(cd "$API" && APP_ENV=development ENABLE_MOCK_CONNECTOR=true \
+(cd "$API" && APP_ENV=development ENABLE_MOCK_CONNECTOR=true MOCK_EPOCH_SECONDS=5 \
   DATABASE_URL="postgresql+asyncpg://$APP_ROLE:$APP_PW@$PG_HOSTPORT/$DB" REDIS_URL="$REDIS_URL" \
   AUTH_JWT_ISSUER=http://127.0.0.1:9999/auth/v1 AUTH_JWT_SECRET="$SECRET" \
   WEB_BASE_URL=http://localhost:3100 CORS_ORIGINS=http://localhost:3100 SMTP_HOST=127.0.0.1 SMTP_PORT=1025 \
@@ -84,5 +84,5 @@ export E2E_BASE_URL=http://localhost:3100 E2E_API_URL=http://localhost:8000/api/
   E2E_AUTH_URL=http://127.0.0.1:9999/auth/v1 E2E_MAILDIR="$WORK/maildir" E2E_SCREENSHOTS="$WORK/shots"
 export E2E_WORKDIR="$WORK"
 (cd "$WEB" && node e2e/accounts.e2e.mjs && node e2e/products.e2e.mjs && node e2e/uploads.e2e.mjs \
-  && node e2e/scans.e2e.mjs)
+  && node e2e/scans.e2e.mjs && node e2e/intel.e2e.mjs)
 echo "logs and screenshots: $WORK"

@@ -26,3 +26,9 @@ def test_uuid7_is_time_ordered_across_milliseconds() -> None:
 
 def test_uuid7_unique() -> None:
     assert len({uuid7() for _ in range(10_000)}) == 10_000
+
+
+def test_uuid7_strictly_increasing_within_a_millisecond() -> None:
+    ids = [uuid7() for _ in range(5_000)]
+    assert ids == sorted(ids)
+    assert all(u.version == 7 for u in ids)

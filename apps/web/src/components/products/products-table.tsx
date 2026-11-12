@@ -1,6 +1,7 @@
 "use client";
 
 import clsx from "clsx";
+import Link from "next/link";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 
 import { Value } from "@/components/ui/value";
@@ -87,7 +88,11 @@ export const COLUMNS: Column[] = [
     key: "asin",
     label: "ASIN",
     sort: "external_id",
-    render: (p) => <span className="font-mono text-xs">{p.external_id}</span>,
+    render: (p) => (
+      <Link href={`/products/${p.id}`} className="text-brand-600 font-mono text-xs hover:underline">
+        {p.external_id}
+      </Link>
+    ),
   },
   {
     key: "name",

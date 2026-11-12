@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from sellerscope.api.v1 import (
     dashboard,
     health,
+    intel,
     invitations,
     me,
     meta,
@@ -22,3 +23,4 @@ api_router.include_router(dashboard.router)
 api_router.include_router(uploads.router)
 api_router.include_router(scans.router)
 api_router.include_router(meta.router)
+api_router.include_router(intel.router)

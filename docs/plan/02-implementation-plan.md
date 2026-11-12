@@ -62,6 +62,12 @@ These are stored separately for every snapshot:
 - `medium` means the seller ID is present but the list is truncated.
 - `low` means the seller was seen only in an older snapshot.
 
+**Implementation notes (M8):**
+- **Comparison baseline:** the previous *usable* snapshot (`ok`/`partial`). Failed scans are never diffed. The first usable snapshot is a baseline with no events.
+- **When "unavailable" is recorded:** `scan_unavailable` is emitted once, on the transition from usable data to no data, not on every scan while data stays unavailable.
+- **Unknown completeness:** a list whose completeness is unknown is treated like a truncated one, so an absence there is inconclusive, never "gone".
+- **Seller events require known seller ids:** both snapshots must have seller ids for every offer (`unique_seller_count` not null).
+
 ## 2.5 Frontend plan
 
 - Route groups `(auth)` and `(app)`. The app shell has a sidebar with the 9 navigation items from the spec, an org switcher, and the user menu.

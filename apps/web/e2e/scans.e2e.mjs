@@ -85,10 +85,9 @@ try {
     await page.getByRole("link", { name: "Dashboard" }).click();
     const tile = page.locator("div.rounded-lg", { hasText: "Products successfully scanned" });
     await tile.locator("div.text-3xl").waitFor();
-    // Seller change tracking arrives in M8: until then this must not read as "0".
+    // Change tracking is on (M8): after one baseline scan, zero NEW sellers is a real result.
     const newSellers = page.locator("div.rounded-lg", { hasText: "New sellers detected" });
-    await newSellers.getByText("Not available", { exact: true }).waitFor();
-    await newSellers.getByText("Seller change tracking is not available yet.").waitFor();
+    await newSellers.locator("div.text-3xl").waitFor();
     await shot(page, "19-dashboard-scanned");
   });
 

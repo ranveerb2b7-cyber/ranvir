@@ -71,7 +71,13 @@ class FakeConnector:
         self, ctx: ConnectorContext, external_ids: list[str]
     ) -> dict[str, OfferSnapshot | ConnectorError]:
         self.calls.append(external_ids)
-        return {a: (self.script[a].popleft() if self.script[a] else ok(a)) for a in external_ids}
+        out: dict[str, OfferSnapshot | ConnectorError] = {}
+        for a in external_ids:
+            item = self.script[a].popleft() if self.script[a] else ok(a)
+            if isinstance(item, OfferSnapshot):
+                item.retrieved_at = datetime.now(UTC)  # stamped at fetch time, like a real source
+            out[a] = item
+        return out
 
 
 def ok(

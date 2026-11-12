@@ -3,6 +3,7 @@
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { Plus, ScanSearch } from "lucide-react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
@@ -327,7 +328,9 @@ function ProductsView() {
               <li key={p.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="font-mono text-xs">{p.external_id}</div>
+                    <Link href={`/products/${p.id}`} className="text-brand-600 font-mono text-xs">
+                      {p.external_id}
+                    </Link>
                     <div className="truncate font-medium">{p.product_name ?? "Unnamed product"}</div>
                     <div className="text-xs text-[var(--text-muted)]">{p.brand_name ?? "No brand"}</div>
                   </div>

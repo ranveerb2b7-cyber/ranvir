@@ -21,9 +21,8 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 NO_SCANS = "no_scans_yet"
 CHANGE_TRACKING_OFF = "change_tracking_not_available"
-# Seller changes are detected by comparing consecutive scans (milestone M8). Until that runs,
-# the absence of "new seller" events says nothing, so the metric is unknown, not 0.
-CHANGE_TRACKING_ENABLED = False
+# Seller changes are detected by comparing consecutive scans (scanning/diff.py, since M8).
+CHANGE_TRACKING_ENABLED = True
 SUCCESS = (ScanResultStatus.OK, ScanResultStatus.PARTIAL)
 UNAVAILABLE = (ScanResultStatus.UNAVAILABLE, ScanResultStatus.ERROR, ScanResultStatus.NOT_FOUND)
 

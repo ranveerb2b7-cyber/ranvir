@@ -43,6 +43,12 @@ web app in Chromium:
 - dashboard metrics, with "new sellers" still not available
 - Scan all monitored, history and quota
 
+`intel.e2e.mjs` covers:
+- the baseline scan, then detected changes after the MOCK drift (`MOCK_EPOCH_SECONDS=5`)
+- product detail with charts and table view
+- seller labels, filters and comparison
+- the dashboard new-seller count
+
 ## What the stub does not prove
 
 The stub implements only the endpoints our flows call: sign-up (auto-confirmed), password sign-in, refresh, get/update user, recover, logout. It signs HS256 tokens the same way GoTrue does.

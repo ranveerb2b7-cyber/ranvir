@@ -104,18 +104,25 @@ Rate limit: 30 uploads per user per hour.
 
 Rate limit: 60 scan starts per user per hour.
 
-## Seller intelligence and history
+## Seller intelligence and history (implemented in M8)
 | Method | Path | Purpose | Perm |
 |---|---|---|---|
-| GET | /products/{id}/offers?scan_result_id= | Offers in latest (or a given) snapshot | member |
-| GET | /products/{id}/scan-results | Snapshot timeline | member |
-| GET | /products/{id}/history | Change events | member |
-| GET | /products/{id}/trends?metric=&from=&to= | Time series (offer count, sellers, min/max price) | member |
-| GET | /sellers | Seller list: products count, last seen, tags | member |
-| GET | /sellers/{id} | Seller detail: products, prices across products | member |
-| PATCH | /sellers/{id} | Tag (authorized/unauthorized), note | products.write |
-| GET | /sellers/compare?ids= | Side-by-side comparison | member |
-| GET | /history | Org-wide change feed (filters: event_type, brand, marketplace, date) | member |
+| GET | /products/{id}/offers?scan_result_id= | Offers in the latest (or a given) snapshot, with seller labels | member |
+| GET | /products/{id}/scans | Every snapshot of the product, newest first (failed scans included) | member |
+| GET | /products/{id}/history | Change events for the product | member |
+| GET | /products/{id}/trends?days=90 | Usable snapshots over time (failed/unavailable scans are gaps) | member |
+| GET | /changes?event_type=&product_id=&seller_id=&include_inconclusive= | Organization-wide change feed | member |
+| GET | /sellers?q=&tag=&currently_offering= | Sellers with products currently offered, Buy Box count, lowest current price | member |
+| GET | /sellers/{id} | Seller detail: per product presence (`observed`, `no_longer_observed`, `not_observed_inconclusive`, `unknown`), current offer, recent changes | member |
+| PATCH | /sellers/{id} | Your labels: display name (source `user`), tags, notes | products.write |
+| GET | /sellers/compare?ids=&ids= | 2–4 sellers side by side on the products they currently offer | member |
+
+**Change events** (`scan_history`) are written in the same transaction as each snapshot by `scanning/diff.py`. Types:
+- `seller_newly_observed`, `seller_no_longer_observed`, `seller_not_observed_inconclusive`
+- `offer_count_changed`, `price_changed`, `buy_box_changed`
+- `scan_unavailable`
+
+Each event carries a confidence of `high`, `medium` or `low`.
 
 ## Dashboard
 | Method | Path | Purpose | Perm |

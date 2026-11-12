@@ -12,7 +12,7 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 | **M5** ✅ | Uploads | Template download, upload with size/type/magic-byte checks, async parse, preview accepted/rejected rows, dedupe (in file + existing), commit, history, rejected-rows CSV | Fixture files: valid, mixed, malformed, oversize, wrong type, macro-enabled `.xlsm` rejected, 50k rows within time budget; formula-injection-safe exports | none |
 | **M6** ✅ | Scanning engine + connector interfaces | Connector protocol and registry, **MockConnector (dev/test only, labelled)**, job/item state machine, Celery queues, token bucket, backoff, retries, cancellation, stale reaper, duplicate-scan guard, scan UI with live progress | Concurrency test: two scan requests for the same product → one 409; 429 → retried with backoff (fake clock); cancellation; production boot refuses the mock connector; failed items visible with reason | none |
 | **M7** | Amazon connector | Spike (feasibility §6.7), LWA token handling, credential encryption (KMS/AES-GCM), OAuth connect flow (option A) + manual credentials (option B), getItemOffers(+Batch), catalog verification, parser, limitation codes, raw payload storage | Parser tests on recorded fixtures (1 seller, many sellers, >20 offers, not found, throttled); encryption round-trip + key rotation; live smoke test against a real account (manual, documented) | **Amazon seller account, SP-API developer registration, LWA client id/secret, refresh token** |
-| **M8** | Seller intelligence + history | Seller profiles, offer views, comparison, confidence, diff engine, history timeline, trends charts | Diff engine table-driven tests incl. truncated lists and failed scans **not** producing disappearance events; metrics never conflated | (M7) |
+| **M8** ✅ | Seller intelligence + history | Seller profiles, offer views, comparison, confidence, diff engine, history timeline, trends charts | Diff engine table-driven tests incl. truncated lists and failed scans **not** producing disappearance events; metrics never conflated | (M7) |
 | **M9** ⏸ deferred | Flipkart connector | Capability-limited connector, FSN validation, seller-API own-listing sub-connector and/or affiliate sub-connector **only if access is granted**, coverage messaging | Unavailable results recorded and displayed as unavailable; no competitor fields populated; capability-driven UI | Flipkart seller API app id/secret and/or affiliate credentials (optional) |
 | **M10** | Alerts | Alert rules, evaluation after each scan, in-app alerts, email (via provider), signed webhooks | Rule evaluation unit tests; no alerts from inconclusive events unless the rule opts in | Email provider API key (e.g. SES/Postmark/Resend) |
 | **M11** | Reports | Product, marketplace, brand, seller, scan-summary and errors/unavailable reports; XLSX + CSV async export; signed download URLs | Exports match DB queries; CSV injection escaped; unavailable values exported as blank + reason column, not 0 | S3/R2 bucket |
@@ -33,7 +33,9 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 | M4 | ✅ Complete | See "M4 report" below |
 | M5 | ✅ Complete | See "M5 report" below |
 | M6 | ✅ Complete | See "M6 report" below |
+| M8 | ✅ Complete (before M7, on MOCK data) | See "M8 report" below |
 | M9 | ⏸ Deferred | Flipkart out of current scope |
+| M7 | ⏳ Waiting for Amazon credentials | |
 | Others | Not started | |
 
 ### M1 report (2026-11-11)
@@ -322,3 +324,44 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 - **No real marketplace data yet.** Amazon SP-API arrives in M7 (needs credentials).
 - **Beat schedule not run live:** the scheduler and reaper functions are tested directly; Celery beat itself wasn't run in this sandbox (it's in docker-compose).
 - **Retention:** raw payloads of mock scans are stored like real ones (retention is M14).
+
+### M8 report (2026-11-12)
+
+Built before M7 at the product owner's request; it runs on the connector interface, so real Amazon data plugs in unchanged.
+
+**Delivered**
+- **Diff engine** (`scanning/diff.py`, rules in docs/plan/02 §2.4):
+  - Events: new seller (high; medium if the previous list was truncated), no longer observed (only from a *complete* list), not observed / inconclusive (truncated or unknown completeness: never called "gone").
+  - Also: offer-count, price (per seller, landed) and Buy Box changes, and one `scan_unavailable` event on the transition to no data.
+  - Failed scans are never diffed, and the first scan is a baseline.
+  - Events are written in the same transaction as the snapshot.
+- **Dashboard:** "New sellers detected (7 days)" is now a real count of change events.
+- **API:**
+  - product offers (latest or any snapshot), scan timeline, change history, trends, organization change feed
+  - sellers list (search, tag, currently offering), seller detail with per-product presence, your own name/tags/notes, 2–4 seller comparison
+- **MOCK connector** drifts per epoch (`MOCK_EPOCH_SECONDS`, default 600) so changes are visible in development.
+- **IDs:** UUIDv7 IDs are now strictly increasing within a process, so events inserted together keep their order (found while testing).
+- **Web:**
+  - **Product detail page:** latest-scan figures with plain-language limitations; offers table with seller links and tags; a link to the Amazon.in product page (opened by the user); two trend charts (counts; price range) with legend, hover tooltip, gaps for unknown values, and a table view; change history; scan history.
+  - **Seller Intelligence:** list, detail with labels form and presence per product, comparison page.
+  - **Scan History:** "Changes" tab with type filter and an opt-in for inconclusive events.
+  - **Navigation:** ASINs now link to product detail.
+- **Charts:** colours are categorical slots 1–3, validated for colour-vision deficiency in light and dark mode. Light-mode aqua is below 3:1 contrast, so direct legend labels and a table view are provided.
+
+**Verified**
+- **Backend: 242 tests pass.**
+  - 15 table-driven diff cases, plus value formatting and MOCK drift.
+  - **End to end through the scanning engine:** a 7-scan sequence covers baseline, new and gone sellers plus a price change, a truncated list (inconclusive, never gone), a failed scan (no events), unavailable (one event), still unavailable (no event), and recovery compared against the last usable snapshot.
+  - **Supporting checks:** the dashboard count; seller presence states; labels; tag/search filters; comparison; snapshot views; trend gaps; viewer permissions.
+- **Cross-tenant matrix:** now covers 44 organization-scoped routes, including all seller endpoints, and checks that the victim org's seller labels are unchanged.
+- **Web:** 38 unit tests pass.
+- **Browser end-to-end:** 8 new steps pass (47 total), with real worker scans and MOCK drift:
+  - the baseline has no changes; a rescan detects new and gone sellers
+  - product detail with charts and table view
+  - seller labelling, tag filter and search, comparison
+  - the dashboard counts new sellers
+
+**Not verified / remaining**
+- **No real marketplace data yet:** everything runs on MOCK data until M7.
+- **Not implemented:** the "seller detection confidence" is shown per change event and as per-product presence; there is no single numeric confidence score per seller.
+- **Scaling:** the seller list is aggregated per organization in one query and paged in memory. This is fine for thousands of sellers; revisit if an organization tracks far more.

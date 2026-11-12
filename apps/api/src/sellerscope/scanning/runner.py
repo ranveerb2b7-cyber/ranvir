@@ -32,6 +32,7 @@ from sellerscope.db.tenant import set_tenant_context
 from sellerscope.models import Marketplace, Product, ScanJob, ScanJobItem
 from sellerscope.models.enums import ScanItemStatus, ScanJobStatus
 from sellerscope.scanning.backoff import backoff_delay
+from sellerscope.scanning.diff import record_changes
 from sellerscope.scanning.jobs import TERMINAL_JOB, finalize_job
 from sellerscope.scanning.ratelimit import TokenBucket
 from sellerscope.scanning.results import record_failure, record_snapshot
@@ -170,7 +171,7 @@ async def _apply_results(
                 "missing_result", "The data source returned no result for this product."
             )
             if isinstance(result, OfferSnapshot):
-                await record_snapshot(
+                result_id = await record_snapshot(
                     session,
                     deps.storage,
                     organization_id=org,
@@ -179,6 +180,9 @@ async def _apply_results(
                     scan_job_item_id=item.item_id,
                     connection_id=ctx.connection.id if ctx.connection else None,
                     snapshot=result,
+                )
+                await record_changes(
+                    session, organization_id=org, product_id=item.product_id, result_id=result_id
                 )
                 await session.execute(
                     update(ScanJobItem)

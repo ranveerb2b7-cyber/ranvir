@@ -310,3 +310,126 @@ export const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
 
 export const ACTIVE_JOB: JobStatus[] = ["queued", "running"];
 export const MOCK_SOURCE = "MOCK";
+
+// ---- Seller intelligence & history (mirrors apps/api/src/sellerscope/schemas/intel.py) ----
+
+export type Presence = "observed" | "no_longer_observed" | "not_observed_inconclusive" | "unknown";
+
+export interface SellerRef {
+  id: string;
+  external_seller_id: string;
+  display_name: string | null;
+}
+
+export interface ProductRef {
+  id: string;
+  external_id: string;
+  product_name: string | null;
+  brand_name: string | null;
+}
+
+export interface SellerSummary {
+  id: string;
+  external_seller_id: string;
+  display_name: string | null;
+  display_name_source: string | null;
+  tags: string[];
+  first_observed_at: string;
+  last_observed_at: string;
+  products_currently_offering: number;
+  buy_box_count: number;
+  lowest_current_price: string | null;
+  currency: string | null;
+  is_mock: boolean;
+}
+
+export interface SellerOffer {
+  listing_price: string | null;
+  shipping_price: string | null;
+  landed_price: string | null;
+  currency: string | null;
+  fulfilment_channel: string;
+  is_buy_box_winner: boolean | null;
+  is_featured_merchant: boolean | null;
+  is_prime: boolean | null;
+  seller_feedback_rating: string | null;
+  seller_feedback_count: number | null;
+  ships_from_country: string | null;
+  condition: string | null;
+}
+
+export interface ChangeEvent {
+  id: string;
+  created_at: string;
+  event_type: string;
+  confidence: "high" | "medium" | "low" | null;
+  product: ProductRef;
+  seller: SellerRef | null;
+  old_value: Record<string, string | number | null> | null;
+  new_value: Record<string, string | number | null> | null;
+  scan_result_id: string;
+  previous_scan_result_id: string | null;
+}
+
+export interface SellerDetail extends SellerSummary {
+  notes: string | null;
+  products: { product: ProductRef; presence: Presence; last_seen_at: string; latest_scan_at: string | null; current_offer: SellerOffer | null }[];
+  recent_changes: ChangeEvent[];
+}
+
+export interface SellerComparison {
+  sellers: SellerSummary[];
+  rows: { product: ProductRef; cells: { seller_id: string; offer: SellerOffer | null }[] }[];
+}
+
+export interface ScanSnapshot {
+  id: string;
+  status: string;
+  data_source: string;
+  retrieved_at: string;
+  total_offer_count: number | null;
+  observed_offer_count: number;
+  unique_seller_count: number | null;
+  is_offer_list_truncated: boolean | null;
+  lowest_observed_price: string | null;
+  highest_observed_price: string | null;
+  buy_box_price: string | null;
+  currency: string | null;
+  limitations: string[];
+  error_code: string | null;
+}
+
+export interface OfferRow extends SellerOffer {
+  position: number;
+  seller: SellerRef | null;
+  seller_tags: string[];
+}
+
+export interface TrendPoint {
+  retrieved_at: string;
+  status: string;
+  total_offer_count: number | null;
+  observed_offer_count: number;
+  unique_seller_count: number | null;
+  lowest_observed_price: string | null;
+  highest_observed_price: string | null;
+  is_offer_list_truncated: boolean | null;
+  data_source: string;
+}
+
+export const PRESENCE_LABELS: Record<Presence, string> = {
+  observed: "Selling now",
+  no_longer_observed: "No longer seen",
+  not_observed_inconclusive: "Not seen (list incomplete)",
+  unknown: "Unknown (no usable scan)",
+};
+
+export const LIMITATION_LABELS: Record<string, string> = {
+  MOCK_DATA: "Generated MOCK data, not real marketplace data.",
+  SELLER_NAME_NOT_PROVIDED: "The marketplace API does not provide seller names; sellers are shown by ID.",
+  SELLER_ID_NOT_PROVIDED: "Some offers came without a seller ID, so the seller count is unknown.",
+  OFFER_LIST_TRUNCATED: "The marketplace returned only part of the offer list.",
+  TOTAL_OFFER_COUNT_NOT_PROVIDED: "The marketplace did not report a total offer count.",
+  SOURCE_UNAVAILABLE: "The data source could not provide data for this product.",
+  PRODUCT_NOT_FOUND: "The product was not found on the marketplace.",
+};

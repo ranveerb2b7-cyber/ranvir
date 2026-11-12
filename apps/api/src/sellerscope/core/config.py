@@ -88,6 +88,8 @@ class Settings(BaseSettings):
 
     # The mock connector produces data labelled MOCK. It is only permitted in development/test.
     enable_mock_connector: bool = False
+    # How often MOCK listings drift (sellers rotate, prices move), in seconds. Dev/test only.
+    mock_epoch_seconds: int = Field(default=600, gt=0)
 
     # Readiness probe timeout for each dependency check, in seconds.
     health_check_timeout_s: float = 2.0
