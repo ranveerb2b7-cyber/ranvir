@@ -65,3 +65,57 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
+
+async function accessToken(): Promise<string | null> {
+  const {
+    data: { session },
+  } = await supabaseBrowser().auth.getSession();
+  return session?.access_token ?? null;
+}
+
+/** Multipart upload with progress reporting (fetch cannot report upload progress). */
+export async function apiUpload<T>(
+  path: string,
+  file: File,
+  orgId: string,
+  onProgress: (fraction: number) => void,
+): Promise<T> {
+  const token = await accessToken();
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${publicConfig.apiUrl}${path}`);
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.setRequestHeader("X-Organization-Id", orgId);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded / e.total);
+    };
+    xhr.onerror = () =>
+      reject(new ApiError({ title: "Network error: the upload did not reach the server.", status: 0, code: "network_error" }));
+    xhr.onload = async () => {
+      const response = new Response(xhr.responseText, { status: xhr.status, statusText: xhr.statusText });
+      if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText) as T);
+      else reject(new ApiError(await parseProblem(response)));
+    };
+    const form = new FormData();
+    form.append("file", file);
+    xhr.send(form);
+  });
+}
+
+/** Downloads an authenticated file (e.g. CSV export) and saves it in the browser. */
+export async function apiDownload(path: string, orgId: string | null, fallbackName: string): Promise<void> {
+  const token = await accessToken();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (orgId) headers["X-Organization-Id"] = orgId;
+  const response = await fetch(`${publicConfig.apiUrl}${path}`, { headers });
+  if (!response.ok) throw new ApiError(await parseProblem(response));
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
+}

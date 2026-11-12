@@ -6,6 +6,8 @@ from sellerscope.core.config import AppEnv, Settings
 PROD_AUTH = {
     "auth_jwt_issuer": "https://auth.example/auth/v1",
     "auth_jwks_url": "https://auth.example/auth/v1/.well-known/jwks.json",
+    "storage_backend": "s3",
+    "s3_bucket": "sellerscope-prod",
 }
 
 
@@ -40,3 +42,8 @@ def test_secrets_are_not_exposed_in_repr() -> None:
 def test_cors_origin_list_parsing() -> None:
     s = Settings(cors_origins=" http://a.test , ,chrome-extension://abc ")
     assert s.cors_origin_list == ["http://a.test", "chrome-extension://abc"]
+
+
+def test_production_requires_s3_storage() -> None:
+    with pytest.raises(ValidationError, match="STORAGE_BACKEND=s3"):
+        Settings(app_env=AppEnv.PRODUCTION, **{**PROD_AUTH, "storage_backend": "local"})  # type: ignore[arg-type]

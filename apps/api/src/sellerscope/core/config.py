@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -52,6 +53,20 @@ class Settings(BaseSettings):
     smtp_from: str = "SellerScope <no-reply@sellerscope.local>"
     invitation_ttl_hours: int = Field(default=168, gt=0)
 
+    # ---- File storage (uploads, later exports) ----
+    # "local" stores files on disk (development/tests only); "s3" uses S3-compatible storage.
+    storage_backend: Literal["local", "s3"] = "local"
+    storage_local_dir: str = ".storage"
+    s3_bucket: str | None = None
+    s3_endpoint_url: str | None = None  # e.g. MinIO / Cloudflare R2; None = AWS
+    s3_region: str = "ap-south-1"
+    s3_access_key_id: str | None = None
+    s3_secret_access_key: SecretStr | None = None
+
+    # ---- Product uploads ----
+    upload_max_bytes: int = Field(default=10 * 1024 * 1024, gt=0)
+    upload_max_rows: int = Field(default=50_000, gt=0)
+
     # ---- Rate limiting (Redis fixed window) ----
     rate_limit_enabled: bool = True
     rate_limit_ip_per_minute: int = Field(default=300, gt=0)
@@ -86,6 +101,11 @@ class Settings(BaseSettings):
             if not (self.auth_jwks_url or self.auth_jwt_secret):
                 raise ValueError(
                     "AUTH_JWKS_URL or AUTH_JWT_SECRET is required in staging/production."
+                )
+            if self.storage_backend != "s3" or not self.s3_bucket:
+                raise ValueError(
+                    "STORAGE_BACKEND=s3 and S3_BUCKET are required in staging/production "
+                    "(local disk storage is for development only)."
                 )
         return self
 

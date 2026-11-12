@@ -16,6 +16,9 @@ x-api-env: &api-env
   WEB_BASE_URL: ${WEB_BASE_URL:-http://localhost:3000}
   SMTP_HOST: mailpit
   SMTP_PORT: "1025"
+  # Local dev: uploads on a volume shared by api + worker. Staging/production must use S3.
+  STORAGE_BACKEND: local
+  STORAGE_LOCAL_DIR: /data/storage
 
 services:
   postgres:
@@ -113,6 +116,7 @@ services:
   api:
     build: ./apps/api
     environment: *api-env
+    volumes: [uploads:/data/storage]
     ports: ["127.0.0.1:8000:8000"]
     depends_on:
       migrate: { condition: service_completed_successfully }
@@ -126,6 +130,7 @@ services:
     build: ./apps/api
     command: ["celery", "-A", "sellerscope.workers.celery_app", "worker", "-Q", "default,imports,scans.amazon,reports,alerts", "--loglevel=INFO"]
     environment: *api-env
+    volumes: [uploads:/data/storage]
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
@@ -153,6 +158,7 @@ services:
     depends_on: [api, auth-gateway]
 
 volumes:
+  uploads:
   pgdata:
   redisdata:
   miniodata:

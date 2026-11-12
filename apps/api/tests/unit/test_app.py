@@ -67,6 +67,8 @@ async def test_docs_disabled_in_production() -> None:
             app_env=AppEnv.PRODUCTION,
             auth_jwt_issuer="https://auth.example/auth/v1",
             auth_jwks_url="https://auth.example/auth/v1/.well-known/jwks.json",
+            storage_backend="s3",
+            s3_bucket="sellerscope-prod",
         )
     )
     transport = ASGITransport(app=app)

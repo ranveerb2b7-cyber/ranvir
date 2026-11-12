@@ -6,6 +6,7 @@ web app in Chromium:
 - a fresh PostgreSQL database, migrated with the restricted app role
 - Redis
 - an SMTP sink (aiosmtpd, writing a Maildir), so invitation emails are actually sent and read
+- a Celery worker (parses uploads, same as production)
 - the API (uvicorn) and the production web build (`next build` standalone server)
 - `stub-auth.mjs`: a **test-only stand-in for Supabase Auth**
 
@@ -27,6 +28,13 @@ web app in Chromium:
 - search and brand filter (URL-synced)
 - sorting, bulk set-brand, edit and stop monitoring
 - dashboard counts and the phone card layout
+
+`uploads.e2e.mjs` covers:
+- template download, wrong file type refused
+- upload with progress, worker parsing, and preview with reasons
+- formula-safe rejected-rows CSV
+- commit, then history
+- a failed file (no ASIN column)
 
 ## What the stub does not prove
 

@@ -20,6 +20,8 @@ from sellerscope.core.middleware import RequestContextMiddleware
 from sellerscope.core.rate_limit import RateLimiter, client_ip
 from sellerscope.db.session import create_engine, create_session_factory
 from sellerscope.services.mailer import SmtpMailer
+from sellerscope.storage import create_storage
+from sellerscope.uploads.dispatch import CeleryDispatcher
 
 API_PREFIX = "/api/v1"
 
@@ -53,6 +55,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.token_verifier = TokenVerifier(settings)
     app.state.mailer = SmtpMailer(settings)
+    app.state.storage = create_storage(settings)
+    app.state.task_dispatcher = CeleryDispatcher()
 
     @app.middleware("http")
     async def ip_rate_limit(request: Request, call_next: RequestResponseEndpoint) -> Response:
@@ -74,7 +78,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Organization-Id", "X-Request-ID"],
-        expose_headers=["X-Request-ID"],
+        expose_headers=["X-Request-ID", "Content-Disposition"],
     )
     app.add_middleware(RequestContextMiddleware)
     register_error_handlers(app)

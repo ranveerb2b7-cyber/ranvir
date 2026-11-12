@@ -32,6 +32,7 @@ NON_ORG_ROUTES = {
     ("POST", "/api/v1/organizations"),
     ("POST", "/api/v1/invitations/preview"),
     ("POST", "/api/v1/invitations/accept"),
+    ("GET", "/api/v1/uploads/template"),  # static file, no organization data
 }
 
 # Minimal valid bodies so requests are not rejected by validation before authorization.
@@ -118,6 +119,16 @@ async def _product(client: AsyncClient, user: AppUser, org: str) -> str:
     return str(r.json()["id"])
 
 
+async def _upload(client: AsyncClient, user: AppUser, org: str) -> str:
+    r = await client.post(
+        "/api/v1/uploads",
+        files={"file": ("victim.csv", b"ASIN\nB0VICTIM02\n", "text/csv")},
+        headers=user.headers(org),
+    )
+    assert r.status_code == 202, r.text
+    return str(r.json()["id"])
+
+
 async def _setup(client: AsyncClient, mailer: RecordingMailer) -> dict[str, Any]:
     alice, alice_member, bob, bob_member = (AppUser(n) for n in ("alice", "am", "bob", "bm"))
     org_a = await make_org(client, alice, "Org A")
@@ -147,11 +158,13 @@ async def _setup(client: AsyncClient, mailer: RecordingMailer) -> dict[str, Any]
             "user_id": str(alice_member.id),
             "invitation_id": inv_a,
             "product_id": await _product(client, alice, org_a),
+            "batch_id": await _upload(client, alice, org_a),
         },
         "b_ids": {
             "user_id": str(bob_member.id),
             "invitation_id": inv_b,
             "product_id": await _product(client, bob, org_b),
+            "batch_id": await _upload(client, bob, org_b),
         },
     }
 
@@ -161,11 +174,13 @@ async def _snapshot(client: AsyncClient, user: AppUser, org: str) -> tuple[Any, 
     members = (await client.get("/api/v1/members", headers=user.headers(org))).json()
     invites = (await client.get("/api/v1/invitations", headers=user.headers(org))).json()
     products = (await client.get("/api/v1/products", headers=user.headers(org))).json()["items"]
+    uploads = (await client.get("/api/v1/uploads", headers=user.headers(org))).json()["items"]
     return (
         org_body["name"],
         sorted((m["user_id"], m["role"], m["status"]) for m in members),
         sorted(i["id"] for i in invites),
         sorted((p["id"], p["brand_name"], p["monitoring_enabled"]) for p in products),
+        sorted((b["id"], b["status"]) for b in uploads),
     )
 
 

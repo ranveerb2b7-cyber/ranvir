@@ -9,7 +9,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 FROM base AS runtime
-RUN useradd --system --uid 10001 app
+RUN useradd --system --uid 10001 app && mkdir -p /data/storage && chown app /data/storage
 COPY --from=deps /app/.venv /app/.venv
 COPY pyproject.toml uv.lock alembic.ini* ./
 COPY src ./src

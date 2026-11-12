@@ -33,12 +33,24 @@ Status: **PROPOSAL — awaiting approval.**
 - Platform secrets (LWA client secret, DB password, Supabase service key) come from the environment / secret manager. `.env` is git-ignored, `.env.example` holds placeholders only, and gitleaks runs in pre-commit and CI.
 - `NEXT_PUBLIC_*` variables are restricted to non-secret values (API URL, Supabase anon key), and a lint check enforces this.
 
-## 9.4 Upload security
-- Allowed extensions are `.csv` and `.xlsx`. `.xls`, `.xlsm` and others are rejected.
-- Uploads are checked by magic bytes and MIME type. The size limit defaults to 10 MB, plus a row limit per plan.
-- XLSX is parsed with `openpyxl` in read-only mode. Formulas are never evaluated (cached values only). Zip-bomb protection caps the uncompressed size and member count.
-- Files are stored in private object storage under a random key, outside the web root.
-- **CSV/Excel formula injection:** exported cells beginning with `= + - @ \t \r` are prefixed with `'`.
+## 9.4 Upload security (implemented in M5)
+- **Accepted files:** only `.csv` and `.xlsx`, checked by **extension and content**:
+  - XLSX must be a ZIP with `[Content_Types].xml` and `xl/workbook.xml`.
+  - CSV must not be a ZIP/OLE file or contain NUL bytes.
+- **Rejected with specific messages:**
+  - macro-enabled workbooks (`.xlsm`, or any archive containing `vbaProject.bin` / a macro content type, even when renamed `.xlsx`)
+  - legacy `.xls` and password-protected (OLE) files
+  - mismatched content
+- **Size limits:**
+  - 10 MB, enforced while streaming the upload, plus a `Content-Length` pre-check
+  - 50,000 rows
+  - ZIP bomb guard: at most 2,000 entries and 200 MB uncompressed
+- **Parsing:** `openpyxl` in read-only mode with `data_only=True`: formulas are never evaluated, only cached values are read. CSV encoding is UTF-8 (with/without BOM), falling back to Windows-1252.
+- **Storage:**
+  - Files are stored under application-generated keys (`org/<org>/uploads/<batch>/original.<ext>`). The uploaded file name is display-only and stripped of path parts.
+  - S3 objects use server-side encryption.
+  - Local-disk storage is refused in staging/production.
+- **CSV/Excel formula injection:** exported cells beginning with `= + - @ \t \r` are prefixed with `'` (rejected-rows export).
 
 ## 9.5 API protection
 - Redis-backed rate limiting per IP (auth/pairing endpoints) and per user and org (general), with tighter limits on scan creation.

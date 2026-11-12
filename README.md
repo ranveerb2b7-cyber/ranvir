@@ -7,8 +7,8 @@ Marketplace seller mapping and intelligence SaaS for brand owners and manufactur
 | | |
 |---|---|
 | Scope | **Amazon.in only.** Flipkart deferred. |
-| Done | M0 planning, M1 foundation, M2 database schema (RLS isolation), M3 authentication, organizations, team & roles, M4 product management & dashboard |
-| Next | M5 Excel/CSV upload |
+| Done | M0 planning, M1 foundation, M2 database schema (RLS isolation), M3 authentication, organizations, team & roles, M4 product management & dashboard, M5 Excel/CSV upload |
+| Next | M6 scanning engine |
 
 No business features are complete yet. See [`docs/plan/08-milestones.md`](docs/plan/08-milestones.md) for progress and [`docs/plan/`](docs/plan/README.md) for the design.
 
@@ -69,7 +69,7 @@ make api      # API on :8000
 ```
 
 ```bash
-make worker   # Celery worker
+make worker   # Celery worker (required: it processes uploaded files)
 ```
 
 ```bash
@@ -100,6 +100,7 @@ Backend integration tests need `TEST_DATABASE_URL` (a user with CREATEROLE; the 
 
 - `GET|POST /api/v1/products`, `POST /api/v1/products/validate`, `POST /api/v1/products/bulk`, `GET|PATCH|DELETE /api/v1/products/{id}`, `GET /api/v1/brands`
 - `GET /api/v1/dashboard/summary`
+- `GET /api/v1/uploads/template`, `GET|POST /api/v1/uploads`, `GET /api/v1/uploads/{id}`, `GET /api/v1/uploads/{id}/rows`, `POST /api/v1/uploads/{id}/commit`, `POST /api/v1/uploads/{id}/discard`, `GET /api/v1/uploads/{id}/rejected.csv`
 
 Authentication: `Authorization: Bearer <Supabase access token>`. Organization-scoped endpoints also need `X-Organization-Id`.
 

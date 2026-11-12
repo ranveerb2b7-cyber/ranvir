@@ -64,6 +64,30 @@ async def existing_products(
     return {external_id: pid for external_id, pid in rows.all()}
 
 
+async def product_quota(
+    session: AsyncSession, organization_id: uuid.UUID
+) -> tuple[int | None, int]:
+    """(plan product limit or None without a live subscription, current live products)."""
+    limit = (
+        await session.execute(
+            select(Plan.max_products)
+            .join(Subscription, Subscription.plan_id == Plan.id)
+            .where(
+                Subscription.organization_id == organization_id,
+                Subscription.status.in_(LIVE_SUBSCRIPTION),
+            )
+        )
+    ).scalar_one_or_none()
+    current = (
+        await session.execute(
+            select(func.count())
+            .select_from(Product)
+            .where(Product.organization_id == organization_id, Product.deleted_at.is_(None))
+        )
+    ).scalar_one()
+    return limit, current
+
+
 async def ensure_product_quota(
     session: AsyncSession, organization_id: uuid.UUID, adding: int
 ) -> None:

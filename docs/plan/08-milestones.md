@@ -9,7 +9,7 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 | **M2** ✅ | Database schema | SQLAlchemy models + Alembic migrations for all tables, RLS policies, DB roles, append-only triggers, seed of `marketplaces` / `plans` | Migrations up/down on empty DB; RLS test: the app role can't read another org's rows even without a WHERE clause; UPDATE on `scan_results` is rejected; unique/partial indexes enforced | none |
 | **M3** ✅ | Auth + orgs + RBAC | Supabase JWT verification, `/me`, org creation, invitations, member management, permission dependency, audit log writes, API rate limiting; web login/register/forgot/reset/accept-invite pages, org switcher, Team page | Invalid/expired JWT → 401; viewer can't write → 403; cross-org access → 404 for **every** tenant endpoint (generated test matrix); invite flow e2e; password reset e2e (Mailpit) | Supabase project URL + anon key + JWT secret/JWKS (or local GoTrue) |
 | **M4** ✅ | Initial dashboard + product management | App shell with 9 nav items, product CRUD, ASIN/FSN validators, duplicate detection, product table (search/filter/sort/pagination), brand filter, bulk actions, KPI tiles wired to real (initially empty) data | Validator unit tests (valid/invalid/edge cases); duplicate → 409; table query tests; Playwright: add product, filter, paginate; empty states say "No scans yet", never 0 | none |
-| **M5** | Uploads | Template download, upload with size/type/magic-byte checks, async parse, preview accepted/rejected rows, dedupe (in file + existing), commit, history, rejected-rows CSV | Fixture files: valid, mixed, malformed, oversize, wrong type, macro-enabled `.xlsm` rejected, 50k rows within time budget; formula-injection-safe exports | none |
+| **M5** ✅ | Uploads | Template download, upload with size/type/magic-byte checks, async parse, preview accepted/rejected rows, dedupe (in file + existing), commit, history, rejected-rows CSV | Fixture files: valid, mixed, malformed, oversize, wrong type, macro-enabled `.xlsm` rejected, 50k rows within time budget; formula-injection-safe exports | none |
 | **M6** | Scanning engine + connector interfaces | Connector protocol and registry, **MockConnector (dev/test only, labelled)**, job/item state machine, Celery queues, token bucket, backoff, retries, cancellation, stale reaper, duplicate-scan guard, scan UI with live progress | Concurrency test: two scan requests for the same product → one 409; 429 → retried with backoff (fake clock); cancellation; production boot refuses the mock connector; failed items visible with reason | none |
 | **M7** | Amazon connector | Spike (feasibility §6.7), LWA token handling, credential encryption (KMS/AES-GCM), OAuth connect flow (option A) + manual credentials (option B), getItemOffers(+Batch), catalog verification, parser, limitation codes, raw payload storage | Parser tests on recorded fixtures (1 seller, many sellers, >20 offers, not found, throttled); encryption round-trip + key rotation; live smoke test against a real account (manual, documented) | **Amazon seller account, SP-API developer registration, LWA client id/secret, refresh token** |
 | **M8** | Seller intelligence + history | Seller profiles, offer views, comparison, confidence, diff engine, history timeline, trends charts | Diff engine table-driven tests incl. truncated lists and failed scans **not** producing disappearance events; metrics never conflated | (M7) |
@@ -31,6 +31,7 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 | M2 | ✅ Complete | See "M2 report" below |
 | M3 | ✅ Complete (with stated limits) | See "M3 report" below |
 | M4 | ✅ Complete | See "M4 report" below |
+| M5 | ✅ Complete | See "M5 report" below |
 | M9 | ⏸ Deferred | Flipkart out of current scope |
 | Others | Not started | |
 
@@ -215,3 +216,52 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
   - Per-product scan frequency: M6.
   - File upload: M5.
 - **Not used yet:** TanStack Table (from the planned stack). The server-driven table didn't need it.
+
+### M5 report (2026-11-12)
+
+**Delivered**
+- **Storage abstraction:**
+  - Local disk for development/tests; S3-compatible (AWS S3/R2/MinIO) with server-side encryption.
+  - Staging/production refuse to start without S3.
+- **Upload safety checks:** see security §9.4.
+- **Parser:**
+  - XLSX (first sheet) and CSV (encoding and delimiter detection).
+  - Header aliases (`ASIN`, `Product link`, `Product Title`, `Brand Name`, …, ignoring "(required)" notes).
+  - Blank rows skipped with sheet row numbers preserved.
+  - Numeric cells kept as integers.
+- **Row classification:**
+  - valid / invalid (with the M4 ASIN rules) / duplicate in file (pointing at the first row) / already in products.
+  - Flipkart rows and FSN-only files are reported as "not supported yet", never silently dropped.
+  - Unknown marketplaces are flagged; over-long names and brands are truncated with a warning.
+- **Processing:** parsing runs in a Celery worker (`uploads.parse`, `imports` queue).
+  - Idempotent: only batches still `uploaded` are processed.
+  - Failures are stored on the batch (`error_code`, `error_message`), never swallowed.
+- **Commit:**
+  - All-or-nothing; respects the plan's product limit (402 leaves the batch committable).
+  - Re-checks duplicates added since the preview and links every row to the product it created.
+- **Rest of the flow:** discard, upload history, detection of an identical file already added, rejected-rows CSV, CSV/XLSX templates, audit log entries.
+- **Web:**
+  - Upload page: template downloads, drag-and-drop or file picker, client pre-check, real upload progress bar, history.
+  - Review page: auto-refreshes while processing; shows counts, detected columns, rows by status with reasons, the plan's remaining room, add/discard, and the rejected-rows download.
+- **Docker:** api + worker share an upload volume for local development.
+
+**Verified**
+- **Backend: 191 tests pass.**
+  - **Safety checks:** 13 unsafe or unsupported file cases (including a renamed macro workbook and a 210 MB zip bomb).
+  - **Parsing:** aliases, encodings and delimiters, row limit, and classification of a messy file.
+  - **Performance:** a 50,000-row XLSX is parsed and classified in about 3.5 s locally (budget 30 s).
+  - **Exports and storage:** CSV injection cases; S3 storage against moto (including the encryption header).
+  - **API flow:** upload → preview → commit; products added between preview and commit; all-or-nothing plan limit; oversized upload (413); failed parse; discard; formula-safe rejected CSV; template round-trip; same-file detection; viewer permissions; a 5,000-row upload through the API.
+- **Cross-tenant matrix:** now covers 28 organization-scoped routes, including every upload endpoint, and checks that the victim org's uploads are unchanged.
+- **Web:** 33 unit tests pass.
+- **Browser end-to-end:** 10 new upload steps pass (33 total). The uploaded file is parsed by a **real Celery worker over Redis**, not an inline shortcut. Steps:
+  - template download, wrong type refused
+  - upload with progress, then preview, then reasons, then rejected CSV (formula escaped)
+  - commit, then the products appear
+  - history, a file without an ASIN column failing clearly
+  - reopening a committed upload
+
+**Not verified / remaining**
+- **S3** is verified against moto, not a real bucket. MinIO is in docker-compose but local dev uses the shared volume.
+- **Uploaded files are kept indefinitely.** Retention/cleanup arrives with M14 (data retention).
+- **Stuck uploads:** a batch whose worker job is lost stays `uploaded` (shown as "Queued"). A stale-job reaper arrives with the scanning engine in M6.

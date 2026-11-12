@@ -25,3 +25,4 @@ coverage/
 # local service data
 dump.rdb
 *.rdb
+.storage/

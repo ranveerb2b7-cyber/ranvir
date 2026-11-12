@@ -154,3 +154,73 @@ export const SCAN_STATUS_LABELS: Record<ScanStatus, string> = {
   unavailable: "Unavailable",
   error: "Failed",
 };
+
+// ---- Uploads (mirrors apps/api/src/sellerscope/schemas/uploads.py) ----
+
+export type BatchStatus = "uploaded" | "parsing" | "preview_ready" | "committed" | "failed" | "discarded";
+export type RowStatus = "valid" | "invalid" | "duplicate_in_file" | "duplicate_existing";
+
+export interface Batch {
+  id: string;
+  original_filename: string;
+  file_size_bytes: number;
+  status: BatchStatus;
+  total_rows: number;
+  valid_rows: number;
+  invalid_rows: number;
+  duplicate_in_file_rows: number;
+  duplicate_existing_rows: number;
+  committed_rows: number;
+  column_mapping: Record<string, string> | null;
+  error_code: string | null;
+  error_message: string | null;
+  uploaded_by: string | null;
+  created_at: string;
+  parsed_at: string | null;
+  committed_at: string | null;
+}
+
+export interface BatchDetail extends Batch {
+  plan: { limit: number | null; current: number; remaining: number | null };
+  same_file_as: string | null;
+}
+
+export interface Page<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface RowIssue {
+  code: string;
+  message: string;
+}
+
+export interface BatchRow {
+  row_number: number;
+  status: RowStatus;
+  asin: string | null;
+  product_name: string | null;
+  brand_name: string | null;
+  original: Record<string, string>;
+  errors: RowIssue[];
+  warnings: RowIssue[];
+  product_id: string | null;
+}
+
+export const BATCH_STATUS_LABELS: Record<BatchStatus, string> = {
+  uploaded: "Queued",
+  parsing: "Processing",
+  preview_ready: "Ready to review",
+  committed: "Added",
+  failed: "Failed",
+  discarded: "Discarded",
+};
+
+export const ROW_STATUS_LABELS: Record<RowStatus, string> = {
+  valid: "Ready to add",
+  invalid: "Invalid",
+  duplicate_in_file: "Duplicate in file",
+  duplicate_existing: "Already in products",
+};

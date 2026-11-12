@@ -43,6 +43,9 @@ Amazon.in only (decided 2026-11-11). Flipkart is deferred. Keep connector code m
 - Send emails only after commit. Report delivery failures; don't swallow them.
 - Identifier parsing/format validation lives in `connectors/identifiers.py`. Format-valid is not "verified": only the marketplace API may set `identifier_status = verified`.
 - In lists, unknown values sort last and are `null` in JSON. Never coerce them to 0 for convenience.
+- **Background work:** goes through `app.state.task_dispatcher` (Celery in the app, `InlineDispatcher` in integration tests).
+  - Worker tasks must record failures on their record (status + error); never swallow them.
+- **Files:** go through `app.state.storage` (`sellerscope.storage`). Use app-generated keys only; never user file names.
 - Web data fetching uses TanStack Query. Tenant data query keys start with `["tenant", orgId, ...]`.
 
 ## Commands

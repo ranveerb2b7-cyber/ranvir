@@ -103,6 +103,7 @@ async def marketplace_id(conn: AsyncConnection) -> uuid.UUID:
 
 # ----------------------------------------------------------------------------- API fixtures
 
+import tempfile  # noqa: E402
 import time as _time  # noqa: E402
 from email.message import EmailMessage  # noqa: E402
 
@@ -114,8 +115,28 @@ from sellerscope.core.config import AppEnv, Settings  # noqa: E402
 from sellerscope.main import create_app  # noqa: E402
 
 AUTH_ISSUER = "http://auth.test/auth/v1"
+_STORAGE_DIR = tempfile.mkdtemp(prefix="sellerscope-test-storage-")
 AUTH_SECRET = "integration-test-hs256-secret-32-bytes!!"  # test-only signing key
 WEB_BASE = "http://web.test"
+
+
+class InlineDispatcher:
+    """Runs upload parsing immediately instead of queueing it for a Celery worker."""
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def parse_upload(self, organization_id: uuid.UUID, batch_id: uuid.UUID) -> None:
+        from sellerscope.uploads.service import parse_batch
+
+        state = self.app.state
+        await parse_batch(
+            state.session_factory,
+            state.storage,
+            state.settings,
+            organization_id=organization_id,
+            batch_id=batch_id,
+        )
 
 
 class RecordingMailer:
@@ -144,6 +165,8 @@ def api_settings(**overrides: Any) -> Settings:
         "auth_jwt_secret": AUTH_SECRET,
         "web_base_url": WEB_BASE,
         "rate_limit_ip_per_minute": 100_000,
+        "storage_backend": "local",
+        "storage_local_dir": _STORAGE_DIR,
     }
     values.update(overrides)
     return Settings(**values)
@@ -192,6 +215,7 @@ async def api(
     app = create_app(api_settings())
     mailer = RecordingMailer()
     app.state.mailer = mailer
+    app.state.task_dispatcher = InlineDispatcher(app)
     transport = ASGITransport(app=app)
     async with (
         app.router.lifespan_context(app),

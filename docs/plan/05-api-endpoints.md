@@ -76,17 +76,19 @@ The first authenticated request creates the user's local record (`users` mirrors
 - **Sorting:** unknown values sort last in both directions.
 - **`multiple_sellers`:** products whose seller count is unknown match neither `true` nor `false`.
 
-## Uploads
+## Uploads (implemented in M5)
 | Method | Path | Purpose | Perm |
 |---|---|---|---|
-| GET | /uploads/template?format=xlsx\|csv | Download template | member |
-| POST | /uploads | Multipart upload (size/type validated) → batch | products.write |
-| GET | /uploads | Upload history | member |
-| GET | /uploads/{id} | Status + counts (polled for progress) | member |
-| GET | /uploads/{id}/rows?status= | Preview accepted/rejected rows | member |
-| POST | /uploads/{id}/commit | Create products from valid rows | products.write |
-| POST | /uploads/{id}/discard | Discard | products.write |
-| GET | /uploads/{id}/rejected.csv | Download rejected rows with reasons | member |
+| GET | /uploads/template?format=xlsx\|csv | Empty template (XLSX includes an Instructions sheet) | authenticated |
+| POST | /uploads | Multipart `file`. Safety checks happen before storing; returns **202** with the batch (`status: uploaded`); a worker parses it. 413 `file_too_large`, 422 with a specific `code` for unsafe or unsupported files | products.write |
+| GET | /uploads | Upload history, newest first (paged) | member |
+| GET | /uploads/{id} | Status, counts, detected columns, error, plan usage, `same_file_as` (poll while `uploaded`/`parsing`) | member |
+| GET | /uploads/{id}/rows?status= | Rows with original cells, normalized ASIN, error/warning codes and messages (paged) | member |
+| POST | /uploads/{id}/commit | Adds the valid rows as products. All-or-nothing; re-checks duplicates; 402 when over the plan limit; 409 unless `preview_ready` | products.write |
+| POST | /uploads/{id}/discard | Discard (nothing is added) | products.write |
+| GET | /uploads/{id}/rejected.csv | Non-added rows with reasons and original cells (formula-injection safe) | member |
+
+Rate limit: 30 uploads per user per hour.
 
 ## Scanning
 | Method | Path | Purpose | Perm |
