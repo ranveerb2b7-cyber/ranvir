@@ -33,7 +33,7 @@ export default function ScanJobPage() {
   const finished = job.data?.finished_at ?? null;
   useEffect(() => {
     if (!finished) return;
-    for (const key of ["products", "dashboard", "scan-jobs", "scan-quota"]) {
+    for (const key of ["products", "dashboard", "scan-jobs", "scan-quota", "alerts"]) {
       void queryClient.invalidateQueries({ queryKey: ["tenant", org.id, key] });
     }
   }, [finished, org.id, queryClient]);

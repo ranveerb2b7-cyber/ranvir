@@ -35,6 +35,7 @@ def create_celery() -> Celery:
         beat_schedule={
             "schedule-due-scans": {"task": "scans.schedule_due", "schedule": 15 * 60.0},
             "recover-stale-work": {"task": "maintenance.recover_stale", "schedule": 5 * 60.0},
+            "deliver-due-alerts": {"task": "alerts.deliver_due", "schedule": 60.0},
         },
     )
     return app

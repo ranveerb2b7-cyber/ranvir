@@ -132,6 +132,7 @@ export interface DashboardSummary {
   products_with_multiple_sellers: Metric;
   total_offers_observed: Metric;
   new_sellers_detected_7d: Metric;
+  open_alerts: Metric;
   products_with_unavailable_data: Metric;
   last_scan_at: string | null;
   marketplaces: {
@@ -433,3 +434,85 @@ export const LIMITATION_LABELS: Record<string, string> = {
   SOURCE_UNAVAILABLE: "The data source could not provide data for this product.",
   PRODUCT_NOT_FOUND: "The product was not found on the marketplace.",
 };
+
+// ---- Alerts (M10) ----
+
+export type AlertRuleType =
+  | "new_seller"
+  | "seller_gone"
+  | "buy_box_changed"
+  | "offer_count_change"
+  | "seller_count_above"
+  | "price_below"
+  | "scan_failed";
+export type AlertSeverity = "info" | "warning" | "critical";
+export type AlertChannel = "in_app" | "email";
+export type AlertStatus = "open" | "acknowledged" | "resolved";
+
+export interface AlertRuleScope {
+  product_ids: string[];
+  brands: string[];
+}
+
+export interface AlertRule {
+  id: string;
+  name: string;
+  rule_type: AlertRuleType;
+  severity: AlertSeverity;
+  params: Record<string, unknown>;
+  scope: AlertRuleScope;
+  channels: AlertChannel[];
+  recipient_user_ids: string[];
+  is_enabled: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  open_alerts: number;
+}
+
+export interface AlertRuleList {
+  items: AlertRule[];
+  limit: number;
+}
+
+export interface AlertDeliveryInfo {
+  channel: AlertChannel;
+  recipient_user_id: string | null;
+  recipient_email: string | null;
+  status: "pending" | "sending" | "sent" | "failed" | "skipped";
+  attempt_count: number;
+  last_error: string | null;
+  next_attempt_at: string | null;
+  sent_at: string | null;
+}
+
+export interface AlertItem {
+  id: string;
+  alert_rule_id: string | null;
+  rule_name: string | null;
+  rule_type: AlertRuleType | null;
+  severity: AlertSeverity;
+  status: AlertStatus;
+  title: string;
+  body: string | null;
+  details: Record<string, unknown>;
+  product: ProductRef | null;
+  seller: SellerRef | null;
+  scan_result_id: string | null;
+  scan_history_id: string | null;
+  created_at: string;
+  acknowledged_by: string | null;
+  acknowledged_at: string | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  resolved_automatically: boolean;
+  delivered_channels: AlertChannel[];
+  deliveries: AlertDeliveryInfo[];
+}
+
+export interface AlertSummary {
+  open: number;
+  acknowledged: number;
+  open_by_severity: Record<AlertSeverity, number>;
+  failed_deliveries: number;
+}

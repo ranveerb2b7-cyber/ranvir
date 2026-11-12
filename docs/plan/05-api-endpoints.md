@@ -136,12 +136,34 @@ Each KPI is `{value, reason}`.
 - **"Total offers observed"** sums offers actually received, not marketplace-reported totals.
 
 ## Alerts
+Implemented in M10. Alerts come only from rule evaluation after each scan, in the same transaction as the snapshot.
+
 | Method | Path | Purpose | Perm |
 |---|---|---|---|
-| GET/POST | /alert-rules | | alerts.manage |
-| PATCH/DELETE | /alert-rules/{id} | | alerts.manage |
-| GET | /alerts?status= | | member |
-| POST | /alerts/{id}/acknowledge \| resolve | | member |
+| GET | /alert-rules | Rules with their unresolved-alert counts, plus the per-organization limit (50) | member |
+| POST | /alert-rules | `{name, rule_type, params, scope: {product_ids, brands}, severity?, channels: [in_app, email], recipient_user_ids, is_enabled}` (params are validated per type; recipients must be active members) | alerts.manage |
+| GET | /alert-rules/{id} | One rule | member |
+| PATCH | /alert-rules/{id} | Partial update; the type can't change | alerts.manage |
+| DELETE | /alert-rules/{id} | Deletes the rule; its alerts are kept with the rule's name | alerts.manage |
+| GET | /alerts?status=&active=&severity=&rule_id=&product_id=&page= | Newest first; each alert has its product, seller and email delivery status | member |
+| GET | /alerts/summary | Open count by severity, acknowledged count, emails that gave up | member |
+| GET | /alerts/{id} | One alert | member |
+| POST | /alerts/{id}/acknowledge \| resolve | Triage. A resolved alert can't be acknowledged (409). | member |
+| POST | /alerts/bulk | `{ids, action: acknowledge\|resolve}`; ids from other organizations are ignored | member |
+| POST | /alerts/{id}/retry-delivery | Re-queue emails that failed after all retries | alerts.manage |
+
+**Rule types**
+| Type | Params | Behaviour |
+|---|---|---|
+| `new_seller` | `min_confidence: high\|medium`, `exclude_seller_tags` | One alert per "newly observed" change event |
+| `seller_gone` | `include_inconclusive` (default false), `exclude_seller_tags` | Proven departures only, unless opted in |
+| `buy_box_changed` | `exclude_seller_tags` (new winner) | One alert per Buy Box change |
+| `offer_count_change` | `min_change`, `direction: any\|increase\|decrease` | Reported total offer count |
+| `seller_count_above` | `threshold` | Threshold rule (see below) |
+| `price_below` | `threshold` (₹, landed), `exclude_seller_tags` | Threshold rule |
+| `scan_failed` | `include_unavailable` | Fires on a failed scan; resolves on the next scan that didn't fail |
+
+**Threshold rules** have at most one unresolved alert per rule and product. They fire only on values known to cross the threshold, for example a lower-bound seller count from a cut-off list that is already above it. They resolve automatically only when complete data proves the condition cleared. Unknown values neither fire nor resolve.
 
 ## Reports
 | Method | Path | Purpose | Perm |

@@ -5,6 +5,7 @@ from sellerscope.models.identity import Invitation, Organization, OrganizationMe
 from sellerscope.models.marketplace import Marketplace, MarketplaceConnection
 from sellerscope.models.operations import (
     Alert,
+    AlertDelivery,
     AlertRule,
     AuditLog,
     ExtensionToken,
@@ -24,6 +25,7 @@ from sellerscope.models.scanning import (
 __all__ = [
     "APPEND_ONLY_TABLES",
     "Alert",
+    "AlertDelivery",
     "AlertRule",
     "AuditLog",
     "ExtensionToken",

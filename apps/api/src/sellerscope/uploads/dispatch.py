@@ -10,6 +10,8 @@ PARSE_TASK = "uploads.parse"
 IMPORTS_QUEUE = "imports"
 SCAN_TASK = "scans.run_job"
 SCANS_QUEUE = "scans.amazon"
+ALERTS_TASK = "alerts.deliver"
+ALERTS_QUEUE = "alerts"
 
 
 class TaskDispatcher(Protocol):
@@ -18,6 +20,8 @@ class TaskDispatcher(Protocol):
     async def run_scan_job(
         self, organization_id: uuid.UUID, job_id: uuid.UUID, countdown_s: float = 0
     ) -> None: ...
+
+    async def deliver_alerts(self, organization_id: uuid.UUID) -> None: ...
 
 
 class CeleryDispatcher:
@@ -35,3 +39,6 @@ class CeleryDispatcher:
         self, organization_id: uuid.UUID, job_id: uuid.UUID, countdown_s: float = 0
     ) -> None:
         await self._send(SCAN_TASK, [str(organization_id), str(job_id)], SCANS_QUEUE, countdown_s)
+
+    async def deliver_alerts(self, organization_id: uuid.UUID) -> None:
+        await self._send(ALERTS_TASK, [str(organization_id)], ALERTS_QUEUE)

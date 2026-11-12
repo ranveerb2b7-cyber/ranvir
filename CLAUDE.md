@@ -50,6 +50,10 @@ Amazon.in only (decided 2026-11-11). Flipkart is deferred. Keep connector code m
   - Snapshots go through `scanning/results.record_snapshot`. Failed scans use `record_failure` and must not move a product's latest pointer.
   - Change events come only from `scanning/diff.py` (same transaction as the snapshot). Never infer "seller gone" from a truncated, failed or unknown-completeness scan.
   - Cross-tenant background work only via the SECURITY DEFINER functions in migration 0006.
+- **Alerts (M10):**
+  - Rules are evaluated only in `alerts/record.py` (called by the scan runner in the snapshot transaction, inside a savepoint so an alerting bug can't lose a scan). Pure logic lives in `alerts/engine.py`; per-type params in `alerts/rules.py`.
+  - Never fire or resolve on unknown data. Inconclusive events alert only when the rule opts in.
+  - Email goes through `alert_deliveries` and `alerts/delivery.py` after commit (one digest per recipient). Failures are recorded per delivery and retried, then shown in the UI.
 - **Files:** go through `app.state.storage` (`sellerscope.storage`). Use app-generated keys only; never user file names.
 - Charts: `components/charts/trend-chart.tsx` (one y-axis, validated `--series-1..3` tokens, gaps for null, table view). Load the dataviz skill before changing charts.
 - Web data fetching uses TanStack Query. Tenant data query keys start with `["tenant", orgId, ...]`.

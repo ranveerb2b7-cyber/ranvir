@@ -48,6 +48,9 @@ BODIES: dict[tuple[str, str], dict[str, Any]] = {
     ("PATCH", "/api/v1/products/{product_id}"): {"brand_name": "Hijacked"},
     ("POST", "/api/v1/scan-jobs"): {"product_ids": ["{product_id}"]},
     ("PATCH", "/api/v1/sellers/{seller_id}"): {"tags": ["hijacked"], "display_name": "Hijacked"},
+    ("POST", "/api/v1/alert-rules"): {"name": "Intruder", "rule_type": "new_seller"},
+    ("PATCH", "/api/v1/alert-rules/{rule_id}"): {"name": "Hijacked", "is_enabled": False},
+    ("POST", "/api/v1/alerts/bulk"): {"ids": ["{alert_id}"], "action": "resolve"},
 }
 
 
@@ -147,6 +150,23 @@ async def _seller(client: AsyncClient, user: AppUser, org: str) -> str:
     return str(sellers[0]["id"])
 
 
+async def _rule(client: AsyncClient, user: AppUser, org: str) -> str:
+    # Fires on the victim product's MOCK scan (it has sellers), so an alert exists too.
+    r = await client.post(
+        "/api/v1/alert-rules",
+        json={"name": "Any sellers", "rule_type": "seller_count_above", "params": {"threshold": 0}},
+        headers=user.headers(org),
+    )
+    assert r.status_code == 201, r.text
+    return str(r.json()["id"])
+
+
+async def _alert(client: AsyncClient, user: AppUser, org: str) -> str:
+    alerts = (await client.get("/api/v1/alerts", headers=user.headers(org))).json()["items"]
+    assert alerts, "the victim product's MOCK scan should have raised an alert"
+    return str(alerts[0]["id"])
+
+
 async def _setup(client: AsyncClient, mailer: RecordingMailer) -> dict[str, Any]:
     alice, alice_member, bob, bob_member = (AppUser(n) for n in ("alice", "am", "bob", "bm"))
     org_a = await make_org(client, alice, "Org A")
@@ -177,16 +197,20 @@ async def _setup(client: AsyncClient, mailer: RecordingMailer) -> dict[str, Any]
             "invitation_id": inv_a,
             "product_id": await _product(client, alice, org_a),
             "batch_id": await _upload(client, alice, org_a),
+            "rule_id": await _rule(client, alice, org_a),
             "job_id": await _scan(client, alice, org_a),
             "seller_id": await _seller(client, alice, org_a),
+            "alert_id": await _alert(client, alice, org_a),
         },
         "b_ids": {
             "user_id": str(bob_member.id),
             "invitation_id": inv_b,
             "product_id": await _product(client, bob, org_b),
             "batch_id": await _upload(client, bob, org_b),
+            "rule_id": await _rule(client, bob, org_b),
             "job_id": await _scan(client, bob, org_b),
             "seller_id": await _seller(client, bob, org_b),
+            "alert_id": await _alert(client, bob, org_b),
         },
     }
 
@@ -199,6 +223,8 @@ async def _snapshot(client: AsyncClient, user: AppUser, org: str) -> tuple[Any, 
     uploads = (await client.get("/api/v1/uploads", headers=user.headers(org))).json()["items"]
     jobs = (await client.get("/api/v1/scan-jobs", headers=user.headers(org))).json()["items"]
     sellers = (await client.get("/api/v1/sellers", headers=user.headers(org))).json()["items"]
+    rules = (await client.get("/api/v1/alert-rules", headers=user.headers(org))).json()["items"]
+    alerts = (await client.get("/api/v1/alerts", headers=user.headers(org))).json()["items"]
     return (
         org_body["name"],
         sorted((m["user_id"], m["role"], m["status"]) for m in members),
@@ -207,6 +233,8 @@ async def _snapshot(client: AsyncClient, user: AppUser, org: str) -> tuple[Any, 
         sorted((b["id"], b["status"]) for b in uploads),
         sorted((j["id"], j["status"], j["cancelled_items"]) for j in jobs),
         sorted((x["id"], x["display_name"], tuple(x["tags"])) for x in sellers),
+        sorted((r["id"], r["name"], r["is_enabled"]) for r in rules),
+        sorted((a["id"], a["status"], tuple(d["status"] for d in a["deliveries"])) for a in alerts),
     )
 
 

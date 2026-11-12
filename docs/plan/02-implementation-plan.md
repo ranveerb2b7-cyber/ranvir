@@ -68,6 +68,26 @@ These are stored separately for every snapshot:
 - **Unknown completeness:** a list whose completeness is unknown is treated like a truncated one, so an absence there is inconclusive, never "gone".
 - **Seller events require known seller ids:** both snapshots must have seller ids for every offer (`unique_seller_count` not null).
 
+## 2.4.1 Alert rules (M10)
+
+- **When rules are checked:** after every scan, in the snapshot's transaction, using only that scan's result and the change events the diff engine just wrote. Rules don't re-derive changes.
+- **Event rules** (new seller, seller gone, Buy Box, offer count) raise one alert per event. `seller_not_observed_inconclusive` raises nothing unless the rule sets `include_inconclusive`.
+- **Threshold rules** (seller count above, price below) keep one unresolved alert per rule and product (partial unique index on `dedupe_key`):
+
+| Data in the new scan | Seller count above N | Price below P |
+|---|---|---|
+| Known count > N (a cut-off list is a lower bound, shown as "at least") | fire | n/a |
+| Count ≤ N, complete list | resolve | n/a |
+| Count ≤ N, cut-off or unknown completeness | nothing | n/a |
+| Seller count unknown (offers without ids), failed or no-data scan | nothing | nothing |
+| A watched offer's landed price < P | n/a | fire (cheapest offer) |
+| Nothing below P, complete list, every watched price known in INR | n/a | resolve |
+| Nothing below P otherwise | n/a | nothing |
+
+- **Scan failed:** fires on a failed scan (optionally also on unavailable/not found) and resolves on the next scan that didn't fail.
+- **Email:** one row per alert and recipient in `alert_deliveries`. After commit, the worker sends one digest per recipient. Failures are retried with exponential backoff (5 attempts by default), then marked `failed` with the error shown in the app. A recipient who is no longer an active member is `skipped`. A worker lost mid-send is re-queued by the beat task, so an email may rarely be sent twice; one is never silently lost.
+- **Signed webhooks** are deferred to M7, which builds encrypted secret storage for Amazon credentials. Webhook signing secrets will use the same storage.
+
 ## 2.5 Frontend plan
 
 - Route groups `(auth)` and `(app)`. The app shell has a sidebar with the 9 navigation items from the spec, an org switcher, and the user menu.

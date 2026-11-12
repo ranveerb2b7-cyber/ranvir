@@ -13,8 +13,8 @@ from fastapi import APIRouter
 from sqlalchemy import ColumnElement, Integer, and_, cast, func, select
 
 from sellerscope.auth.deps import OrgDep, SessionDep
-from sellerscope.models import Marketplace, Product, ScanHistory, ScanResult
-from sellerscope.models.enums import HistoryEventType, ScanResultStatus
+from sellerscope.models import Alert, Marketplace, Product, ScanHistory, ScanResult
+from sellerscope.models.enums import AlertStatus, HistoryEventType, ScanResultStatus
 from sellerscope.schemas.products import DashboardSummary, MarketplaceBreakdown, Metric
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -104,6 +104,14 @@ async def summary(session: SessionDep, ctx: OrgDep) -> DashboardSummary:
         f"excludes {unknown} product(s) whose seller data was not available" if unknown else None
     )
     last_scan = max((r.last_scan_at for r in rows if r.last_scan_at), default=None)
+    # A count of this organization's own alert records: zero is a known value.
+    open_alerts = (
+        await session.execute(
+            select(func.count())
+            .select_from(Alert)
+            .where(Alert.organization_id == ctx.organization_id, Alert.status == AlertStatus.OPEN)
+        )
+    ).scalar_one()
     return DashboardSummary(
         total_products_monitored=Metric(value=sum(r.monitored for r in rows)),
         products_successfully_scanned=scan_metric(sum(r.successful for r in rows)),
@@ -111,6 +119,7 @@ async def summary(session: SessionDep, ctx: OrgDep) -> DashboardSummary:
         total_offers_observed=scan_metric(sum(r.offers for r in rows)),
         new_sellers_detected_7d=new_sellers,
         products_with_unavailable_data=scan_metric(sum(r.unavailable for r in rows)),
+        open_alerts=Metric(value=open_alerts),
         last_scan_at=last_scan,
         marketplaces=[
             MarketplaceBreakdown(

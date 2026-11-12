@@ -9,14 +9,18 @@ from collections.abc import Awaitable, Callable
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from sellerscope.alerts.delivery import deliver_all_due, deliver_pending
 from sellerscope.connectors.registry import ConnectorRegistry
 from sellerscope.core.config import Settings, get_settings
 from sellerscope.db.session import create_engine, create_session_factory
 from sellerscope.scanning.maintenance import recover_stale_work, schedule_due_scans
 from sellerscope.scanning.ratelimit import TokenBucket
 from sellerscope.scanning.runner import ScanDeps, run_job, utcnow
+from sellerscope.services.mailer import SmtpMailer
 from sellerscope.storage import create_storage
 from sellerscope.uploads.dispatch import (
+    ALERTS_QUEUE,
+    ALERTS_TASK,
     IMPORTS_QUEUE,
     PARSE_TASK,
     SCAN_TASK,
@@ -79,6 +83,8 @@ def run_scan_job(organization_id: str, job_id: str) -> str:
             await redis.aclose()
 
     again_in = asyncio.run(_with_db(go))
+    # Alerts raised by this run are committed; email them now rather than at the next beat.
+    deliver_alerts.apply_async(args=[organization_id], queue=ALERTS_QUEUE)
     if again_in is not None:
         run_scan_job.apply_async(
             args=[organization_id, job_id], queue=SCANS_QUEUE, countdown=max(again_in, 0.5)
@@ -109,5 +115,35 @@ def recover_stale() -> str:
             factory, CeleryDispatcher(), stale_after_s=settings.scan_stale_after_s
         )
         return f"scan jobs: {jobs}, uploads: {uploads}"
+
+    return asyncio.run(_with_db(go))
+
+
+@celery_app.task(name=ALERTS_TASK, queue=ALERTS_QUEUE, acks_late=True)
+def deliver_alerts(organization_id: str) -> str:
+    """Sends pending alert emails for one organization (outcomes recorded per delivery)."""
+
+    async def go(settings: Settings, factory: async_sessionmaker[AsyncSession]) -> str:
+        report = await deliver_pending(
+            factory,
+            SmtpMailer(settings),
+            settings,
+            organization_id=uuid.UUID(organization_id),
+            now=utcnow(),
+        )
+        return (
+            f"sent {report.sent}, retrying {report.retrying}, failed {report.failed}, "
+            f"skipped {report.skipped}"
+        )
+
+    return asyncio.run(_with_db(go))
+
+
+@celery_app.task(name="alerts.deliver_due")
+def deliver_due() -> int:
+    """Beat: retries and anything a lost task message left behind."""
+
+    async def go(settings: Settings, factory: async_sessionmaker[AsyncSession]) -> int:
+        return await deliver_all_due(factory, SmtpMailer(settings), settings, now=utcnow())
 
     return asyncio.run(_with_db(go))

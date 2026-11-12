@@ -18,6 +18,7 @@ const TILES: { key: keyof DashboardSummary; label: string }[] = [
   { key: "total_offers_observed", label: "Total offers observed" },
   { key: "new_sellers_detected_7d", label: "New sellers detected (7 days)" },
   { key: "products_with_unavailable_data", label: "Products with unavailable data" },
+  { key: "open_alerts", label: "Open alerts" },
 ];
 
 function metricCell(m: Metric) {

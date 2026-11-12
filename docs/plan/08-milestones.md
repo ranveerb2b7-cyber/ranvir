@@ -34,6 +34,7 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 | M5 | ✅ Complete | See "M5 report" below |
 | M6 | ✅ Complete | See "M6 report" below |
 | M8 | ✅ Complete (before M7, on MOCK data) | See "M8 report" below |
+| M10 | ✅ Complete: in-app + email. Signed webhooks moved to M7. | See "M10 report" below |
 | M9 | ⏸ Deferred | Flipkart out of current scope |
 | M7 | ⏳ Waiting for Amazon credentials | |
 | Others | Not started | |
@@ -365,3 +366,45 @@ Built before M7 at the product owner's request; it runs on the connector interfa
 - **No real marketplace data yet:** everything runs on MOCK data until M7.
 - **Not implemented:** the "seller detection confidence" is shown per change event and as per-product presence; there is no single numeric confidence score per seller.
 - **Scaling:** the seller list is aggregated per organization in one query and paged in memory. This is fine for thousands of sellers; revisit if an organization tracks far more.
+
+### M10 report (2026-11-12)
+
+Built before M7, on MOCK data. Rules read the scan results and change events that the real connector will produce, so nothing changes when Amazon data arrives.
+
+**Delivered**
+- **Rule types:** new seller, seller gone, Buy Box changed, offer count changed, too many sellers, price below (landed, with seller-tag exclusions, e.g. your own "authorized" sellers), scan failed.
+  - Scope: all products, brands, or selected products.
+  - Severity: info, warning or critical (a default per type).
+  - Rules for docs/plan/02 §2.4.1:
+    - Inconclusive events never alert unless the rule opts in.
+    - Threshold rules fire only on known values and resolve automatically only on complete data.
+    - One unresolved alert per condition.
+- **Engine:** evaluated in the scan transaction, inside a savepoint, so a bug in alerting can never lose a scan. A test covers this.
+- **Email:** after commit, the Celery `alerts` queue sends one digest per recipient.
+  - Retries use exponential backoff.
+  - Failures are recorded per delivery (error, attempts, next retry) and shown on the alert, with a "Retry email" action and a page-level warning.
+  - Recipients who left the organization are skipped and reported.
+  - A beat task every minute retries and recovers lost sends, through one new SECURITY DEFINER function, `alert_delivery_orgs`.
+- **API:** rule CRUD (audited), inbox with filters, summary, acknowledge/resolve, bulk actions, retry delivery. Viewers can triage but not manage rules.
+- **Web:**
+  - Alerts page with an inbox (severity shown as icon + text, email status, bulk actions, pagination) and a Rules tab (create/edit dialog with type-specific settings, product picker, email recipients, enable toggle, delete).
+  - Open-alert count in the navigation and an "Open alerts" dashboard tile.
+- **Schema:** migration 0007 adds `alert_deliveries` (RLS, grants, `updated_at` trigger), the rule severity and recipients, alert context columns (`rule_name`, dedupe key, scan result, seller, details, resolved by), and the new rule types.
+
+**Verified**
+- **Backend: 263 tests pass.**
+  - **14 unit tests** cover every rule against unknown, cut-off, failed and no-data inputs.
+  - **Integration tests:** a 5-scan sequence through the real runner (baseline, new cheap seller, cut-off list, failure, recovery with automatic resolution); deduplication and re-raise after a manual resolve; disabled rules; email failure, retry, give-up and a manual retry; a skipped ex-member; beat delivery across organizations, including a stale send; validation and permissions; rule deletion keeping alerts; audit rows.
+- **Cross-tenant matrix:** now 56 organization-scoped routes (12 new), and the snapshot covers rules and alerts. The new function is checked as SECURITY DEFINER and not executable by PUBLIC.
+- **Web: 41 unit tests pass.**
+- **Browser end-to-end: 9 new steps pass (56 total).** The Celery worker sends the digest to the SMTP sink. Screenshots were checked at desktop and phone width.
+- **Bug fixed during testing:** the rule on/off toggle didn't move until the server answered. It now updates immediately.
+- **e2e runner:** one run hit the API's per-IP limit (300/min), because all test browsers share one IP and the scripts run back-to-back. The throwaway e2e stack now raises that limit. Production keeps its limit and per-user limits are unchanged.
+
+**Not verified / remaining**
+- **Signed webhooks are not built.** They're deferred to M7 so signing secrets use the same encrypted credential storage.
+- **Production email:** needs an SMTP provider (e.g. Amazon SES in ap-south-1, Postmark or Resend) via `SMTP_*`. Only the local SMTP sink is tested.
+- **Not built:**
+  - per-user notification preferences and unsubscribe links (recipients are chosen per rule)
+  - alert history export (M11 reports)
+- **No real Amazon data yet:** alerts reflect MOCK data until M7.

@@ -224,8 +224,11 @@ async def record_changes(
     organization_id: uuid.UUID,
     product_id: uuid.UUID,
     result_id: uuid.UUID,
-) -> list[Change]:
-    """Diffs a just-written snapshot against the product's earlier ones; writes scan_history."""
+) -> list[tuple[uuid.UUID, Change]]:
+    """Diffs a just-written snapshot against the product's earlier ones; writes scan_history.
+
+    Returns (scan_history id, change) pairs, in event order.
+    """
     current = (
         await session.execute(select(ScanResult).where(ScanResult.id == result_id))
     ).scalar_one()
@@ -251,13 +254,14 @@ async def record_changes(
         await load_view(session, organization_id, current),
         last_any.status if last_any else None,
     )
-    if changes:
+    recorded = [(uuid7(), c) for c in changes]
+    if recorded:
         reference = last_usable if current.status in USABLE else last_any
         await session.execute(
             insert(ScanHistory),
             [
                 {
-                    "id": uuid7(),
+                    "id": history_id,
                     "organization_id": organization_id,
                     "product_id": product_id,
                     "scan_result_id": result_id,
@@ -268,7 +272,7 @@ async def record_changes(
                     "new_value": c.new_value,
                     "confidence": c.confidence,
                 }
-                for c in changes
+                for history_id, c in recorded
             ],
         )
-    return changes
+    return recorded

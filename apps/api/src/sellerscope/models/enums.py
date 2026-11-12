@@ -129,6 +129,21 @@ class AlertRuleType(StrEnum):
     PRICE_BELOW = "price_below"
     OFFER_COUNT_CHANGE = "offer_count_change"
     SCAN_FAILED = "scan_failed"
+    SELLER_GONE = "seller_gone"
+    BUY_BOX_CHANGED = "buy_box_changed"
+
+
+class AlertChannel(StrEnum):
+    IN_APP = "in_app"
+    EMAIL = "email"
+
+
+class DeliveryStatus(StrEnum):
+    PENDING = "pending"
+    SENDING = "sending"
+    SENT = "sent"
+    FAILED = "failed"
+    SKIPPED = "skipped"
 
 
 class AlertSeverity(StrEnum):

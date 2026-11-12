@@ -143,5 +143,6 @@ class DashboardSummary(ApiModel):
     total_offers_observed: Metric
     new_sellers_detected_7d: Metric
     products_with_unavailable_data: Metric
+    open_alerts: Metric
     last_scan_at: datetime | None
     marketplaces: list[MarketplaceBreakdown]

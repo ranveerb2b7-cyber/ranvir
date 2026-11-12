@@ -79,6 +79,11 @@ class Settings(BaseSettings):
     scan_stale_after_s: int = Field(default=600, gt=0)
     scan_schedule_batch: int = Field(default=500, gt=0)
 
+    # ---- Alert email delivery ----
+    alert_delivery_max_attempts: int = Field(default=5, ge=1)
+    # Retry n waits base * 2^(n-1) seconds, capped at one hour.
+    alert_delivery_backoff_s: float = Field(default=60.0, gt=0)
+
     # ---- Rate limiting (Redis fixed window) ----
     rate_limit_enabled: bool = True
     rate_limit_ip_per_minute: int = Field(default=300, gt=0)

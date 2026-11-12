@@ -6,7 +6,16 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, LargeBinary, Text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    LargeBinary,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy import text as sql
 from sqlalchemy.dialects.postgresql import ARRAY, INET, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -23,9 +32,11 @@ from sellerscope.db.base import (
 )
 from sellerscope.models.enums import (
     ActorType,
+    AlertChannel,
     AlertRuleType,
     AlertSeverity,
     AlertStatus,
+    DeliveryStatus,
     ReportFormat,
     ReportStatus,
     ReportType,
@@ -34,10 +45,21 @@ from sellerscope.models.enums import (
 
 class AlertRule(UUIDPk, TenantOwned, Timestamps, Base):
     __tablename__ = "alert_rules"
-    __table_args__ = (tenant_unique("alert_rules"), check_in("rule_type", AlertRuleType))
+    __table_args__ = (
+        tenant_unique("alert_rules"),
+        check_in("rule_type", AlertRuleType),
+        check_in("severity", AlertSeverity),
+        CheckConstraint(
+            "channels <@ ARRAY['in_app', 'email']::text[] AND 'in_app' = ANY(channels)",
+            name="channels_valid",
+        ),
+    )
 
     name: Mapped[str] = mapped_column(Text, nullable=False)
     rule_type: Mapped[str] = mapped_column(Text, nullable=False)
+    severity: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=sql(f"'{AlertSeverity.WARNING}'")
+    )
     params: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default=sql("'{}'::jsonb")
     )
@@ -45,7 +67,11 @@ class AlertRule(UUIDPk, TenantOwned, Timestamps, Base):
         JSONB, nullable=False, server_default=sql("'{}'::jsonb")
     )
     channels: Mapped[list[str]] = mapped_column(
-        ARRAY(Text), nullable=False, server_default=sql("'{in_app}'")
+        ARRAY(Text), nullable=False, server_default=sql(f"'{{{AlertChannel.IN_APP}}}'")
+    )
+    # Members who receive email for this rule (checked again at send time).
+    recipient_user_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(UUID(as_uuid=True)), nullable=False, server_default=sql("'{}'")
     )
     is_enabled: Mapped[bool] = mapped_column(nullable=False, server_default=sql("true"))
     created_by: Mapped[uuid.UUID | None] = mapped_column(
@@ -61,11 +87,32 @@ class Alert(UUIDPk, TenantOwned, Timestamps, Base):
         tenant_fk("alert_rule_id", "alert_rules"),
         tenant_fk("product_id", "products"),
         tenant_fk("scan_history_id", "scan_history"),
+        tenant_fk("scan_result_id", "scan_results"),
+        tenant_fk("seller_profile_id", "seller_profiles"),
         check_in("severity", AlertSeverity),
         check_in("status", AlertStatus),
+        # One unresolved alert per rule and condition (e.g. "seller count above 5" on a product).
+        Index(
+            "uq_alerts_open_dedupe",
+            "organization_id",
+            "alert_rule_id",
+            "dedupe_key",
+            unique=True,
+            postgresql_where=sql("status <> 'resolved'"),
+        ),
+        Index(None, "organization_id", "product_id", sql("created_at DESC")),
     )
 
     alert_rule_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    # Kept so an alert still says which rule raised it after the rule is deleted.
+    rule_name: Mapped[str | None] = mapped_column(Text)
+    rule_type: Mapped[str | None] = mapped_column(Text)
+    dedupe_key: Mapped[str] = mapped_column(Text, nullable=False)
+    scan_result_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    seller_profile_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    details: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=sql("'{}'::jsonb")
+    )
     product_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     scan_history_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     severity: Mapped[str] = mapped_column(Text, nullable=False)
@@ -79,9 +126,41 @@ class Alert(UUIDPk, TenantOwned, Timestamps, Base):
     )
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Null with resolved_at set = resolved automatically when the condition cleared.
+    resolved_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
     delivered_channels: Mapped[list[str]] = mapped_column(
         ARRAY(Text), nullable=False, server_default=sql("'{}'")
     )
+
+
+class AlertDelivery(UUIDPk, TenantOwned, Timestamps, Base):
+    """One outbound notification of an alert (an email to one member). Retried on failure."""
+
+    __tablename__ = "alert_deliveries"
+    __table_args__ = (
+        tenant_unique("alert_deliveries"),
+        tenant_fk("alert_id", "alerts", ondelete="CASCADE"),
+        UniqueConstraint("alert_id", "channel", "recipient_user_id"),
+        Index(None, "organization_id", "status", "next_attempt_at"),
+        check_in("channel", AlertChannel),
+        check_in("status", DeliveryStatus),
+    )
+
+    alert_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    channel: Mapped[str] = mapped_column(Text, nullable=False)
+    recipient_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    status: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=sql(f"'{DeliveryStatus.PENDING}'")
+    )
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=sql("0"))
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ReportExport(UUIDPk, TenantOwned, Timestamps, Base):

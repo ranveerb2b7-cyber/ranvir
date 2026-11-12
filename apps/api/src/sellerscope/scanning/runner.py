@@ -18,6 +18,7 @@ import structlog
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from sellerscope.alerts.record import load_rules, safe_alerts_for_scan
 from sellerscope.connectors.base import (
     ConnectorContext,
     ConnectorError,
@@ -166,6 +167,7 @@ async def _apply_results(
     now = deps.clock()
     async with deps.session_factory() as session, session.begin():
         await set_tenant_context(session, organization_id=org, user_id=None)
+        rules = await load_rules(session, org)
         for item in items:
             result = outcome.get(item.external_id) or TransientError(
                 "missing_result", "The data source returned no result for this product."
@@ -181,8 +183,17 @@ async def _apply_results(
                     connection_id=ctx.connection.id if ctx.connection else None,
                     snapshot=result,
                 )
-                await record_changes(
+                events = await record_changes(
                     session, organization_id=org, product_id=item.product_id, result_id=result_id
+                )
+                await safe_alerts_for_scan(
+                    session,
+                    organization_id=org,
+                    product_id=item.product_id,
+                    result_id=result_id,
+                    events=events,
+                    rules=rules,
+                    now=now,
                 )
                 await session.execute(
                     update(ScanJobItem)
@@ -215,7 +226,7 @@ async def _apply_results(
                     )
                 )
             else:
-                await record_failure(
+                failure_id = await record_failure(
                     session,
                     organization_id=org,
                     product_id=item.product_id,
@@ -223,6 +234,15 @@ async def _apply_results(
                     source=connector.code,
                     error_code=result.code,
                     at=now,
+                )
+                await safe_alerts_for_scan(
+                    session,
+                    organization_id=org,
+                    product_id=item.product_id,
+                    result_id=failure_id,
+                    events=[],
+                    rules=rules,
+                    now=now,
                 )
                 await session.execute(
                     update(ScanJobItem)
@@ -248,8 +268,9 @@ async def _fail_unavailable(
     now = deps.clock()
     async with deps.session_factory() as session, session.begin():
         await set_tenant_context(session, organization_id=org, user_id=None)
+        rules = await load_rules(session, org)
         for item in items:
-            await record_failure(
+            failure_id = await record_failure(
                 session,
                 organization_id=org,
                 product_id=item.product_id,
@@ -257,6 +278,15 @@ async def _fail_unavailable(
                 source="none",
                 error_code="connector_unavailable",
                 at=now,
+            )
+            await safe_alerts_for_scan(
+                session,
+                organization_id=org,
+                product_id=item.product_id,
+                result_id=failure_id,
+                events=[],
+                rules=rules,
+                now=now,
             )
         await session.execute(
             update(ScanJobItem)

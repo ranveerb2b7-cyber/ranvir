@@ -154,6 +154,8 @@ class InlineDispatcher:
         self.scan_calls: list[tuple[uuid.UUID, uuid.UUID]] = []
         self.parse_calls: list[tuple[uuid.UUID, uuid.UUID]] = []
         self.scan_delays: list[float | None] = []
+        self.deliver_calls: list[uuid.UUID] = []
+        self.defer_alerts = False
 
     def scan_deps(self) -> Any:
         from sellerscope.scanning.runner import ScanDeps
@@ -177,6 +179,23 @@ class InlineDispatcher:
         self.scan_calls.append((organization_id, job_id))
         if not self.defer_scans:
             self.scan_delays.append(await run_job(self.scan_deps(), organization_id, job_id))
+            # Like the Celery task: alerts raised by the run are emailed right after it.
+            await self.deliver_alerts(organization_id)
+
+    async def deliver_alerts(self, organization_id: uuid.UUID) -> None:
+        from sellerscope.alerts.delivery import deliver_pending
+
+        self.deliver_calls.append(organization_id)
+        if self.defer_alerts:
+            return
+        state = self.app.state
+        await deliver_pending(
+            state.session_factory,
+            state.mailer,
+            state.settings,
+            organization_id=organization_id,
+            now=self.clock(),
+        )
 
     async def parse_upload(self, organization_id: uuid.UUID, batch_id: uuid.UUID) -> None:
         from sellerscope.uploads.service import parse_batch

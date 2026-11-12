@@ -597,7 +597,8 @@ async def test_maintenance_functions_are_not_public(owner_engine: AsyncEngine) -
                     "SELECT p.proname, p.prosecdef, "
                     "has_function_privilege('public', p.oid, 'EXECUTE') "
                     "FROM pg_proc p WHERE p.proname IN "
-                    "('due_scan_products', 'reset_stale_scan_items', 'reset_stale_uploads')"
+                    "('due_scan_products', 'reset_stale_scan_items', 'reset_stale_uploads', "
+                    "'alert_delivery_orgs')"
                 )
             )
         ).all()
@@ -605,6 +606,7 @@ async def test_maintenance_functions_are_not_public(owner_engine: AsyncEngine) -
         "due_scan_products",
         "reset_stale_scan_items",
         "reset_stale_uploads",
+        "alert_delivery_orgs",
     }
     assert all(r[1] and not r[2] for r in rows)  # SECURITY DEFINER, not executable by PUBLIC
 

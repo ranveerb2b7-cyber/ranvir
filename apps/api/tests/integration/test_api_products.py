@@ -509,6 +509,7 @@ async def test_dashboard_without_scans_is_not_available_not_zero(api: Api) -> No
     org = await make_org(client, owner)
     s = await _summary(client, owner, org)
     assert s["total_products_monitored"] == {"value": 0, "reason": None}  # a real, known zero
+    assert s["open_alerts"] == {"value": 0, "reason": None}
     for key in (
         "products_successfully_scanned",
         "products_with_multiple_sellers",

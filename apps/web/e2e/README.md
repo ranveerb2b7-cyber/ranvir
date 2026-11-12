@@ -49,6 +49,13 @@ web app in Chromium:
 - seller labels, filters and comparison
 - the dashboard new-seller count
 
+`alerts.e2e.mjs` covers:
+- creating rules in the UI, including a validation error (email without recipients)
+- a threshold rule firing on the first scan while change rules wait for a baseline
+- new-seller alerts after the MOCK drift, emailed by the worker's `alerts` queue to the SMTP sink
+- acknowledge, resolve, status filter, bulk acknowledge, disabling a rule
+- the open-alerts badge and dashboard tile, and the inbox at phone width
+
 ## What the stub does not prove
 
 The stub implements only the endpoints our flows call: sign-up (auto-confirmed), password sign-in, refresh, get/update user, recover, logout. It signs HS256 tokens the same way GoTrue does.
