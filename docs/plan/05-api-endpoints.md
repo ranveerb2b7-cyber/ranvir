@@ -59,17 +59,22 @@ The first authenticated request creates the user's local record (`users` mirrors
 | POST | /connections/{id}/verify | Test call, update status | connections.manage |
 | DELETE | /connections/{id} | Revoke + wipe secret | connections.manage |
 
-## Products
+## Products (implemented in M4)
 | Method | Path | Purpose | Perm |
 |---|---|---|---|
-| GET | /products | List: `q, marketplace, brand, scan_status, has_multiple_sellers, sort, cursor, limit` | member |
-| POST | /products | Add one manually | products.write |
-| POST | /products/validate | Validate identifiers without saving | products.write |
-| GET | /products/{id} | Detail + latest snapshot | member |
-| PATCH | /products/{id} | Edit name/brand/monitoring | products.write |
-| DELETE | /products/{id} | Soft delete | products.write |
-| POST | /products/bulk | Bulk action: delete / enable / disable monitoring / set frequency | products.write |
-| GET | /brands | Distinct brands with counts | member |
+| GET | /products | List with the latest scan per product. Params: `q` (ASIN prefix, name or brand), `marketplace`, `brand` (`__none__` = no brand), `scan_status` (incl. `not_scanned`), `multiple_sellers`, `monitoring`, `sort`, `order`, `page`, `page_size` (≤100) | member |
+| POST | /products | Add one: `{identifier}` is an ASIN **or an Amazon product URL**. 422 `identifier_invalid` (with `reason`), 409 `product_exists` (with `existing_product_id`), 402 `plan_limit_reached` / `subscription_required` | products.write |
+| POST | /products/validate | Check up to 1000 identifiers (format, warnings, existing duplicates) without saving | member |
+| GET | /products/{id} | One product + latest snapshot | member |
+| PATCH | /products/{id} | Edit name / brand / monitoring (identifier is immutable) | products.write |
+| DELETE | /products/{id} | Soft delete; scan history is kept; the same ASIN can be re-added | products.write |
+| POST | /products/bulk | Up to 500 ids: `delete`, `enable_monitoring`, `disable_monitoring`, `set_brand`. Returns `affected` and `not_found` (other orgs' ids land here) | products.write |
+| GET | /brands | Distinct brands with product counts (including "no brand") | member |
+
+**List semantics:**
+- **Unknown values** (never scanned, or not provided by the source) are `null`.
+- **Sorting:** unknown values sort last in both directions.
+- **`multiple_sellers`:** products whose seller count is unknown match neither `true` nor `false`.
 
 ## Uploads
 | Method | Path | Purpose | Perm |
@@ -109,8 +114,13 @@ The first authenticated request creates the user's local record (`users` mirrors
 ## Dashboard
 | Method | Path | Purpose | Perm |
 |---|---|---|---|
-| GET | /dashboard/summary | The 7 KPI tiles (each with as-of time and completeness) | member |
-| GET | /dashboard/marketplace-breakdown | | member |
+| GET | /dashboard/summary | The KPI tiles plus a per-marketplace breakdown (implemented in M4) | member |
+
+Each KPI is `{value, reason}`.
+- **Product counts** are always known (0 is a real zero).
+- **Scan-derived KPIs** are `null` with `reason: "no_scans_yet"` until the first scan.
+- **"Products with multiple sellers"** says how many scanned products it excludes because their seller data was unavailable.
+- **"Total offers observed"** sums offers actually received, not marketplace-reported totals.
 
 ## Alerts
 | Method | Path | Purpose | Perm |

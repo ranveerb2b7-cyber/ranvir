@@ -23,7 +23,7 @@ Status: **PROPOSAL — awaiting approval.**
 - **Money:** `numeric(12,2)` + `currency char(3)` (INR). Never float.
 - **Enums:** Postgres `text` + CHECK constraints (simpler migrations than native enums), mirrored as Python `StrEnum`.
 - **Errors:** RFC 9457 `application/problem+json` with stable `code` strings.
-- **Pagination:** cursor-based (`?cursor=&limit=`) for large tables. Sort and filter parameters are whitelisted.
+- **Pagination:** cursor-based (`?cursor=&limit=`) for large append-only tables (history, audit). **The product list uses page/page_size with a total count** (decided in M4): the UI needs page numbers and totals, and product counts are bounded by the plan limit. Sort and filter parameters are whitelisted.
 - **Validation:** Pydantic v2 for every request and response. No `dict` passthrough.
 - **Testing pyramid:** unit tests (pure parsing/diff/validators), integration tests (API + real Postgres + Redis, connector tests against recorded fixtures via `respx`), contract tests (OpenAPI snapshot), e2e tests (Playwright for critical paths).
 - **Fixtures** recorded from real API responses are stored **only** under `tests/fixtures`, with identifying data scrubbed. They are never loaded at runtime.

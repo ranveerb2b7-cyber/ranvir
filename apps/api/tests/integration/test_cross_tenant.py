@@ -40,6 +40,10 @@ BODIES: dict[tuple[str, str], dict[str, Any]] = {
     ("PATCH", "/api/v1/members/{user_id}"): {"role": "viewer"},
     ("POST", "/api/v1/organizations/current/transfer-ownership"): {"user_id": "{user_id}"},
     ("POST", "/api/v1/invitations"): {"email": "intruder@example.com", "role": "admin"},
+    ("POST", "/api/v1/products"): {"identifier": "B0INTRUDER"},
+    ("POST", "/api/v1/products/validate"): {"items": [{"identifier": "B0INTRUDER"}]},
+    ("POST", "/api/v1/products/bulk"): {"ids": ["{product_id}"], "action": "delete"},
+    ("PATCH", "/api/v1/products/{product_id}"): {"brand_name": "Hijacked"},
 }
 
 
@@ -89,11 +93,29 @@ def _fill(path: str, ids: dict[str, str]) -> str:
     return re.sub(r"\{(\w+)\}", lambda m: ids[m.group(1)], path)
 
 
+def _fill_value(value: Any, ids: dict[str, str]) -> Any:
+    if isinstance(value, str):
+        return _fill(value, ids)
+    if isinstance(value, list):
+        return [_fill_value(v, ids) for v in value]
+    if isinstance(value, dict):
+        return {k: _fill_value(v, ids) for k, v in value.items()}
+    return value
+
+
 def _body(method: str, path: str, ids: dict[str, str]) -> dict[str, Any] | None:
     body = BODIES.get((method, path))
-    if body is None:
-        return None
-    return {k: (_fill(v, ids) if isinstance(v, str) else v) for k, v in body.items()}
+    return None if body is None else _fill_value(body, ids)
+
+
+async def _product(client: AsyncClient, user: AppUser, org: str) -> str:
+    r = await client.post(
+        "/api/v1/products",
+        json={"identifier": "B0VICTIM01", "brand_name": "V"},
+        headers=user.headers(org),
+    )
+    assert r.status_code == 201, r.text
+    return str(r.json()["id"])
 
 
 async def _setup(client: AsyncClient, mailer: RecordingMailer) -> dict[str, Any]:
@@ -121,8 +143,16 @@ async def _setup(client: AsyncClient, mailer: RecordingMailer) -> dict[str, Any]
         "bob": bob,
         "org_a": org_a,
         "org_b": org_b,
-        "a_ids": {"user_id": str(alice_member.id), "invitation_id": inv_a},
-        "b_ids": {"user_id": str(bob_member.id), "invitation_id": inv_b},
+        "a_ids": {
+            "user_id": str(alice_member.id),
+            "invitation_id": inv_a,
+            "product_id": await _product(client, alice, org_a),
+        },
+        "b_ids": {
+            "user_id": str(bob_member.id),
+            "invitation_id": inv_b,
+            "product_id": await _product(client, bob, org_b),
+        },
     }
 
 
@@ -130,10 +160,12 @@ async def _snapshot(client: AsyncClient, user: AppUser, org: str) -> tuple[Any, 
     org_body = (await client.get("/api/v1/organizations/current", headers=user.headers(org))).json()
     members = (await client.get("/api/v1/members", headers=user.headers(org))).json()
     invites = (await client.get("/api/v1/invitations", headers=user.headers(org))).json()
+    products = (await client.get("/api/v1/products", headers=user.headers(org))).json()["items"]
     return (
         org_body["name"],
         sorted((m["user_id"], m["role"], m["status"]) for m in members),
         sorted(i["id"] for i in invites),
+        sorted((p["id"], p["brand_name"], p["monitoring_enabled"]) for p in products),
     )
 
 

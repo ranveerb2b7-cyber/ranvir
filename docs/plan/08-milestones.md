@@ -8,7 +8,7 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 | **M1** ✅ | Monorepo foundation | Folder structure, uv + pnpm workspaces, docker-compose (pg, redis, minio, mailpit, auth), Makefile, CI (lint/type/test), `.env.example`, README, CLAUDE.md, health endpoints, Next.js shell | `make test` green; CI green; `/health/ready` checks DB + Redis; web builds; compose file validates | none |
 | **M2** ✅ | Database schema | SQLAlchemy models + Alembic migrations for all tables, RLS policies, DB roles, append-only triggers, seed of `marketplaces` / `plans` | Migrations up/down on empty DB; RLS test: the app role can't read another org's rows even without a WHERE clause; UPDATE on `scan_results` is rejected; unique/partial indexes enforced | none |
 | **M3** ✅ | Auth + orgs + RBAC | Supabase JWT verification, `/me`, org creation, invitations, member management, permission dependency, audit log writes, API rate limiting; web login/register/forgot/reset/accept-invite pages, org switcher, Team page | Invalid/expired JWT → 401; viewer can't write → 403; cross-org access → 404 for **every** tenant endpoint (generated test matrix); invite flow e2e; password reset e2e (Mailpit) | Supabase project URL + anon key + JWT secret/JWKS (or local GoTrue) |
-| **M4** | Initial dashboard + product management | App shell with 9 nav items, product CRUD, ASIN/FSN validators, duplicate detection, product table (search/filter/sort/pagination), brand filter, bulk actions, KPI tiles wired to real (initially empty) data | Validator unit tests (valid/invalid/edge cases); duplicate → 409; table query tests; Playwright: add product, filter, paginate; empty states say "No scans yet", never 0 | none |
+| **M4** ✅ | Initial dashboard + product management | App shell with 9 nav items, product CRUD, ASIN/FSN validators, duplicate detection, product table (search/filter/sort/pagination), brand filter, bulk actions, KPI tiles wired to real (initially empty) data | Validator unit tests (valid/invalid/edge cases); duplicate → 409; table query tests; Playwright: add product, filter, paginate; empty states say "No scans yet", never 0 | none |
 | **M5** | Uploads | Template download, upload with size/type/magic-byte checks, async parse, preview accepted/rejected rows, dedupe (in file + existing), commit, history, rejected-rows CSV | Fixture files: valid, mixed, malformed, oversize, wrong type, macro-enabled `.xlsm` rejected, 50k rows within time budget; formula-injection-safe exports | none |
 | **M6** | Scanning engine + connector interfaces | Connector protocol and registry, **MockConnector (dev/test only, labelled)**, job/item state machine, Celery queues, token bucket, backoff, retries, cancellation, stale reaper, duplicate-scan guard, scan UI with live progress | Concurrency test: two scan requests for the same product → one 409; 429 → retried with backoff (fake clock); cancellation; production boot refuses the mock connector; failed items visible with reason | none |
 | **M7** | Amazon connector | Spike (feasibility §6.7), LWA token handling, credential encryption (KMS/AES-GCM), OAuth connect flow (option A) + manual credentials (option B), getItemOffers(+Batch), catalog verification, parser, limitation codes, raw payload storage | Parser tests on recorded fixtures (1 seller, many sellers, >20 offers, not found, throttled); encryption round-trip + key rotation; live smoke test against a real account (manual, documented) | **Amazon seller account, SP-API developer registration, LWA client id/secret, refresh token** |
@@ -30,6 +30,7 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 | M1 | ✅ Complete | See "M1 report" below |
 | M2 | ✅ Complete | See "M2 report" below |
 | M3 | ✅ Complete (with stated limits) | See "M3 report" below |
+| M4 | ✅ Complete | See "M4 report" below |
 | M9 | ⏸ Deferred | Flipkart out of current scope |
 | Others | Not started | |
 
@@ -153,3 +154,64 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 - **Real Supabase Auth was not exercised.** Building GoTrue from source in the sandbox was blocked by policy, and Docker isn't available. The e2e run used a test-only stand-in (`apps/web/e2e/stub-auth.mjs`). Still unchecked: email confirmation, the PKCE callback, the real password-reset email flow, and GoTrue rate limits. Check these with `make up` + Mailpit, or a staging Supabase project.
 - **The GoTrue image tag `v2.197.0`** is taken from the auth repository's changelog and hasn't been pulled. The compose `auth` and `auth-gateway` services are written but haven't been run.
 - **Planned for later:** MFA for owners/admins is a Supabase project setting, to configure at deployment (M14). Org purge after soft-delete is part of the retention work (M14). The `/auth/session/revoke` endpoint arrives with extension tokens (M12).
+
+### M4 report (2026-11-12)
+
+**Delivered**
+- **ASIN parsing and format validation** (`connectors/identifiers.py`):
+  - Accepts bare ASINs or Amazon product URLs (`/dp/`, `/gp/product/`, `/gp/aw/d/`, `/product/`).
+  - Rejects short links (amzn.in, amzn.to) with guidance, because resolving them would mean visiting Amazon.
+  - Warns on non-India Amazon links, unusual formats, and ISBN-10 check-digit mismatches.
+  - Products are stored as `format_valid`. Existence on Amazon.in is only confirmed via the official API (M7).
+- **Product API:**
+  - Add (ASIN or URL), batch-validate, list, get, edit, soft-delete, bulk actions (delete, monitoring on/off, set brand), brand list.
+  - Enforces the plan's product limit (402).
+  - Audit-logged.
+- **Product list:**
+  - Search (ASIN prefix, name, brand; LIKE wildcards treated literally) and filters (brand incl. "no brand", scan status incl. "not scanned", multiple sellers, monitoring).
+  - Whitelisted sorting with unknown values last; page/page_size pagination.
+  - Each row carries the latest scan snapshot.
+- **Dashboard summary:**
+  - Real product counts.
+  - Scan-derived KPIs are `null` + reason until scans exist.
+  - The multiple-sellers KPI states what it excludes.
+  - The offers KPI counts observed offers only.
+  - Per-marketplace breakdown.
+- **Web, Product Mapping page:**
+  - The 10 required columns, sortable headers, search and filters synced to the URL, pagination with page size.
+  - Add-product dialog with live validation and duplicate detection; edit dialog.
+  - Row selection with bulk actions.
+  - Phone card layout.
+  - Every unknown value shows "Not available" with an explanation, never 0.
+- **Web, Dashboard:** live KPIs and marketplace breakdown.
+
+**Verified**
+- **Backend: 141 tests pass:**
+  - 24 identifier cases
+  - product create, duplicates, re-add after delete, other-org independence
+  - batch validation, plan limit and missing subscription (402), viewer read-only
+  - every filter and sort, including unknown-last ordering and LIKE escaping
+  - pagination bounds; unknown metrics staying null (seller count never derived from offers)
+  - edit/delete, including the identifier being immutable
+  - bulk with foreign ids
+  - dashboard with no products, with products but no scans, and with fixture scans
+- **Cross-tenant matrix:** now covers 21 organization-scoped routes, including every product, brand and dashboard endpoint, and checks that the victim org's products are unchanged afterwards.
+- **Web:** 25 unit tests pass (unknown vs real-zero rendering, price formatting).
+- **Browser end-to-end:** 12 new steps pass (23 total with M3):
+  - empty dashboard, add from a URL
+  - duplicate and short-link rejection
+  - 31 products with pagination
+  - search + brand filter surviving a reload
+  - sorting, bulk set-brand, edit and stop monitoring
+  - dashboard counts, phone layout
+- **Bugs the e2e run found and fixed:**
+  - the pagination label showed the next page's range while the previous rows were still on screen
+  - a delayed search update restored a brand filter the user had just cleared
+
+**Not verified / remaining**
+- **Scan-dependent columns** are only exercised with labelled test fixtures until scanning exists (M6/M7).
+- **Deferred to later milestones:**
+  - Product detail page (seller list, history): M8.
+  - Per-product scan frequency: M6.
+  - File upload: M5.
+- **Not used yet:** TanStack Table (from the planned stack). The server-driven table didn't need it.

@@ -7,8 +7,8 @@ Marketplace seller mapping and intelligence SaaS for brand owners and manufactur
 | | |
 |---|---|
 | Scope | **Amazon.in only.** Flipkart deferred. |
-| Done | M0 planning, M1 foundation, M2 database schema (RLS isolation), M3 authentication, organizations, team & roles |
-| Next | M4 dashboard + product management |
+| Done | M0 planning, M1 foundation, M2 database schema (RLS isolation), M3 authentication, organizations, team & roles, M4 product management & dashboard |
+| Next | M5 Excel/CSV upload |
 
 No business features are complete yet. See [`docs/plan/08-milestones.md`](docs/plan/08-milestones.md) for progress and [`docs/plan/`](docs/plan/README.md) for the design.
 
@@ -97,6 +97,9 @@ Backend integration tests need `TEST_DATABASE_URL` (a user with CREATEROLE; the 
 - `POST /api/v1/organizations`, `GET|PATCH|DELETE /api/v1/organizations/current`, `POST /api/v1/organizations/current/transfer-ownership`
 - `GET /api/v1/members`, `PATCH|DELETE /api/v1/members/{user_id}`, `DELETE /api/v1/members/me`
 - `GET|POST /api/v1/invitations`, `POST /api/v1/invitations/{id}/resend`, `DELETE /api/v1/invitations/{id}`, `POST /api/v1/invitations/preview`, `POST /api/v1/invitations/accept`
+
+- `GET|POST /api/v1/products`, `POST /api/v1/products/validate`, `POST /api/v1/products/bulk`, `GET|PATCH|DELETE /api/v1/products/{id}`, `GET /api/v1/brands`
+- `GET /api/v1/dashboard/summary`
 
 Authentication: `Authorization: Bearer <Supabase access token>`. Organization-scoped endpoints also need `X-Organization-Id`.
 

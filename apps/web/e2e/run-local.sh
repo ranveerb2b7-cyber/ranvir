@@ -71,6 +71,7 @@ for url in http://localhost:8000/api/v1/health/ready http://localhost:3100/login
 done
 
 echo "› e2e"
-(cd "$WEB" && E2E_BASE_URL=http://localhost:3100 E2E_MAILDIR="$WORK/maildir" E2E_SCREENSHOTS="$WORK/shots" \
-  node e2e/accounts.e2e.mjs)
+export E2E_BASE_URL=http://localhost:3100 E2E_API_URL=http://localhost:8000/api/v1 \
+  E2E_AUTH_URL=http://127.0.0.1:9999/auth/v1 E2E_MAILDIR="$WORK/maildir" E2E_SCREENSHOTS="$WORK/shots"
+(cd "$WEB" && node e2e/accounts.e2e.mjs && node e2e/products.e2e.mjs)
 echo "logs and screenshots: $WORK"

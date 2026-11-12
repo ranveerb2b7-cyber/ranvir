@@ -41,6 +41,8 @@ Amazon.in only (decided 2026-11-11). Flipkart is deferred. Keep connector code m
   - Return 404 (not 403) for other tenants' resources.
 - Record security-relevant changes with `services.audit.record(...)` in the same transaction.
 - Send emails only after commit. Report delivery failures; don't swallow them.
+- Identifier parsing/format validation lives in `connectors/identifiers.py`. Format-valid is not "verified": only the marketplace API may set `identifier_status = verified`.
+- In lists, unknown values sort last and are `null` in JSON. Never coerce them to 0 for convenience.
 - Web data fetching uses TanStack Query. Tenant data query keys start with `["tenant", orgId, ...]`.
 
 ## Commands

@@ -20,6 +20,14 @@ web app in Chromium:
 - rename in Settings
 - mobile layout
 
+`products.e2e.mjs` covers:
+- empty dashboard KPIs (real zero vs "Not available")
+- adding from a URL, plus duplicate and short-link rejection
+- 31 products with pagination
+- search and brand filter (URL-synced)
+- sorting, bulk set-brand, edit and stop monitoring
+- dashboard counts and the phone card layout
+
 ## What the stub does not prove
 
 The stub implements only the endpoints our flows call: sign-up (auto-confirmed), password sign-in, refresh, get/update user, recover, logout. It signs HS256 tokens the same way GoTrue does.

@@ -24,6 +24,7 @@ class AppError(Exception):
         title: str,
         detail: str | None = None,
         headers: dict[str, str] | None = None,
+        extra: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(detail or title)
         self.status = status
@@ -31,6 +32,7 @@ class AppError(Exception):
         self.title = title
         self.detail = detail
         self.headers = headers
+        self.extra = extra or {}
 
 
 def problem(
@@ -59,7 +61,9 @@ def problem(
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app_error(request: Request, exc: AppError) -> JSONResponse:
-        return problem(request, exc.status, exc.code, exc.title, exc.detail, exc.headers)
+        return problem(
+            request, exc.status, exc.code, exc.title, exc.detail, exc.headers, **exc.extra
+        )
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
