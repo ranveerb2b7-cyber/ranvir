@@ -2,7 +2,7 @@
 
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Plus } from "lucide-react";
+import { Plus, ScanSearch } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
@@ -21,7 +21,14 @@ import { Alert, Button, errorMessage, Input, Select } from "@/components/ui/form
 import { Value } from "@/components/ui/value";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
-import { SCAN_STATUS_LABELS, type BrandCount, type Product, type ProductPage, type ScanStatus } from "@/lib/types";
+import {
+  SCAN_STATUS_LABELS,
+  type BrandCount,
+  type Product,
+  type ProductPage,
+  type ScanJobCreated,
+  type ScanStatus,
+} from "@/lib/types";
 
 const PAGE_SIZES = [25, 50, 100];
 const NO_BRAND = "__none__";
@@ -29,6 +36,7 @@ const NO_BRAND = "__none__";
 function ProductsView() {
   const { org, can } = useSession();
   const canWrite = can("products.write");
+  const canScan = can("scans.run");
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -84,6 +92,20 @@ function ProductsView() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkError, setBulkError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+
+  async function scan(body: { product_ids: string[] } | { all_monitored: true }) {
+    setScanning(true);
+    setBulkError(null);
+    try {
+      const job = await api<ScanJobCreated>("/scan-jobs", { method: "POST", orgId: org.id, body });
+      await queryClient.invalidateQueries({ queryKey: ["tenant", org.id, "scan-jobs"] });
+      router.push(`/history/${job.id}`);
+    } catch (e) {
+      setBulkError(errorMessage(e));
+      setScanning(false);
+    }
+  }
   const [notice, setNotice] = useState<string | null>(null);
 
   const items = products.data?.items ?? [];
@@ -143,12 +165,20 @@ function ProductsView() {
             Amazon.in products you monitor. Offer, seller and price data appear after the first scan.
           </p>
         </div>
-        {canWrite && (
-          <Button onClick={() => setAdding(true)}>
-            <Plus aria-hidden className="mr-1 size-4" />
-            Add product
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {canScan && total > 0 && (
+            <Button variant="secondary" disabled={scanning} onClick={() => void scan({ all_monitored: true })}>
+              <ScanSearch aria-hidden className="mr-1 size-4" />
+              Scan all monitored
+            </Button>
+          )}
+          {canWrite && (
+            <Button onClick={() => setAdding(true)}>
+              <Plus aria-hidden className="mr-1 size-4" />
+              Add product
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_200px_180px_180px]">
@@ -189,6 +219,11 @@ function ProductsView() {
       {canWrite && visibleSelected.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 text-sm">
           <span className="mr-2 font-medium">{selected.size} selected</span>
+          {canScan && (
+            <Button disabled={scanning} onClick={() => void scan({ product_ids: [...selected] })}>
+              Scan now
+            </Button>
+          )}
           <Button variant="secondary" onClick={() => void bulk("set_brand")}>
             Set brand
           </Button>

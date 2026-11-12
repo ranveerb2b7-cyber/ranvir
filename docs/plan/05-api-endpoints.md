@@ -90,15 +90,19 @@ The first authenticated request creates the user's local record (`users` mirrors
 
 Rate limit: 30 uploads per user per hour.
 
-## Scanning
+## Scanning (implemented in M6)
 | Method | Path | Purpose | Perm |
 |---|---|---|---|
-| POST | /scan-jobs | Create: `{product_ids}` or `{filter}`; 409 for products already in an active scan | scans.run |
-| GET | /scan-jobs | List | member |
-| GET | /scan-jobs/{id} | Progress counters | member |
-| GET | /scan-jobs/{id}/items?status= | Per-product status + errors | member |
-| POST | /scan-jobs/{id}/cancel | Cancel pending items | scans.run |
-| POST | /scan-jobs/{id}/retry-failed | New job for failed items | scans.run |
+| POST | /scan-jobs | `{product_ids}` or `{all_monitored: true}` → **202** job. Products already being scanned are skipped (`already_running`); 409 `scan_already_running` if none left, 409 `connector_unavailable` without an authorized data source, 402 `scan_quota_exceeded` | scans.run |
+| GET | /scan-jobs | Jobs, newest first (paged) | member |
+| GET | /scan-jobs/quota | Product scans used this UTC month vs plan limit | member |
+| GET | /scan-jobs/{id} | Status and counters (poll while `queued`/`running`) | member |
+| GET | /scan-jobs/{id}/items?status= | Per product: status, attempts, next retry, last error, result summary | member |
+| POST | /scan-jobs/{id}/cancel | Cancels products not started yet; in-flight ones finish | scans.run |
+| POST | /scan-jobs/{id}/retry-failed | New job for the products that failed | scans.run |
+| GET | /meta | Public: environment, version, `mock_connector_enabled` (drives the MOCK DATA banner) | public |
+
+Rate limit: 60 scan starts per user per hour.
 
 ## Seller intelligence and history
 | Method | Path | Purpose | Perm |

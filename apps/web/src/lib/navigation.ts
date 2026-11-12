@@ -24,7 +24,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/upload", label: "Upload Products", icon: Upload, milestone: "M5" },
   { href: "/products", label: "Product Mapping", icon: PackageSearch, milestone: "M4" },
   { href: "/sellers", label: "Seller Intelligence", icon: Store, milestone: "M8" },
-  { href: "/history", label: "Scan History", icon: History, milestone: "M8" },
+  { href: "/history", label: "Scan History", icon: History, milestone: "M6" },
   { href: "/alerts", label: "Alerts", icon: Bell, milestone: "M10" },
   { href: "/reports", label: "Reports", icon: FileBarChart, milestone: "M11" },
   { href: "/team", label: "Team Management", icon: Users, milestone: "M3" },

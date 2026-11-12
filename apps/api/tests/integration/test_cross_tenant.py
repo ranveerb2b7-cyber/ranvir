@@ -33,6 +33,7 @@ NON_ORG_ROUTES = {
     ("POST", "/api/v1/invitations/preview"),
     ("POST", "/api/v1/invitations/accept"),
     ("GET", "/api/v1/uploads/template"),  # static file, no organization data
+    ("GET", "/api/v1/meta"),  # public runtime facts (environment, mock mode)
 }
 
 # Minimal valid bodies so requests are not rejected by validation before authorization.
@@ -45,6 +46,7 @@ BODIES: dict[tuple[str, str], dict[str, Any]] = {
     ("POST", "/api/v1/products/validate"): {"items": [{"identifier": "B0INTRUDER"}]},
     ("POST", "/api/v1/products/bulk"): {"ids": ["{product_id}"], "action": "delete"},
     ("PATCH", "/api/v1/products/{product_id}"): {"brand_name": "Hijacked"},
+    ("POST", "/api/v1/scan-jobs"): {"product_ids": ["{product_id}"]},
 }
 
 
@@ -129,6 +131,15 @@ async def _upload(client: AsyncClient, user: AppUser, org: str) -> str:
     return str(r.json()["id"])
 
 
+async def _scan(client: AsyncClient, user: AppUser, org: str) -> str:
+    products = (await client.get("/api/v1/products", headers=user.headers(org))).json()["items"]
+    r = await client.post(
+        "/api/v1/scan-jobs", json={"product_ids": [products[0]["id"]]}, headers=user.headers(org)
+    )
+    assert r.status_code == 202, r.text
+    return str(r.json()["id"])
+
+
 async def _setup(client: AsyncClient, mailer: RecordingMailer) -> dict[str, Any]:
     alice, alice_member, bob, bob_member = (AppUser(n) for n in ("alice", "am", "bob", "bm"))
     org_a = await make_org(client, alice, "Org A")
@@ -159,12 +170,14 @@ async def _setup(client: AsyncClient, mailer: RecordingMailer) -> dict[str, Any]
             "invitation_id": inv_a,
             "product_id": await _product(client, alice, org_a),
             "batch_id": await _upload(client, alice, org_a),
+            "job_id": await _scan(client, alice, org_a),
         },
         "b_ids": {
             "user_id": str(bob_member.id),
             "invitation_id": inv_b,
             "product_id": await _product(client, bob, org_b),
             "batch_id": await _upload(client, bob, org_b),
+            "job_id": await _scan(client, bob, org_b),
         },
     }
 
@@ -175,12 +188,14 @@ async def _snapshot(client: AsyncClient, user: AppUser, org: str) -> tuple[Any, 
     invites = (await client.get("/api/v1/invitations", headers=user.headers(org))).json()
     products = (await client.get("/api/v1/products", headers=user.headers(org))).json()["items"]
     uploads = (await client.get("/api/v1/uploads", headers=user.headers(org))).json()["items"]
+    jobs = (await client.get("/api/v1/scan-jobs", headers=user.headers(org))).json()["items"]
     return (
         org_body["name"],
         sorted((m["user_id"], m["role"], m["status"]) for m in members),
         sorted(i["id"] for i in invites),
         sorted((p["id"], p["brand_name"], p["monitoring_enabled"]) for p in products),
         sorted((b["id"], b["status"]) for b in uploads),
+        sorted((j["id"], j["status"], j["cancelled_items"]) for j in jobs),
     )
 
 

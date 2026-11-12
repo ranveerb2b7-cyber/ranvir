@@ -5,7 +5,8 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 
 import { Value } from "@/components/ui/value";
 import { formatCount, formatDateTime, formatPrice } from "@/lib/format";
-import { MARKETPLACE_LABELS, SCAN_STATUS_LABELS, type Product, type ScanStatus } from "@/lib/types";
+import { MockBadge } from "@/components/layout/mock-banner";
+import { MARKETPLACE_LABELS, MOCK_SOURCE, SCAN_STATUS_LABELS, type Product, type ScanStatus } from "@/lib/types";
 
 export type SortKey =
   | "created_at"
@@ -128,7 +129,16 @@ export const COLUMNS: Column[] = [
     sort: "last_scanned_at",
     render: (p) => <Value why={NOT_SCANNED}>{formatDateTime(p.last_scanned_at)}</Value>,
   },
-  { key: "status", label: "Scan status", render: (p) => <StatusBadge status={p.scan_status} /> },
+  {
+    key: "status",
+    label: "Scan status",
+    render: (p) => (
+      <>
+        <StatusBadge status={p.scan_status} />
+        {p.latest_scan?.data_source === MOCK_SOURCE && <MockBadge />}
+      </>
+    ),
+  },
 ];
 
 export function SortHeader({ column, sort, order, onSort }: {

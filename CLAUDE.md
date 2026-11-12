@@ -45,6 +45,10 @@ Amazon.in only (decided 2026-11-11). Flipkart is deferred. Keep connector code m
 - In lists, unknown values sort last and are `null` in JSON. Never coerce them to 0 for convenience.
 - **Background work:** goes through `app.state.task_dispatcher` (Celery in the app, `InlineDispatcher` in integration tests).
   - Worker tasks must record failures on their record (status + error); never swallow them.
+- **Scanning:**
+  - Connectors implement `connectors/base.MarketplaceConnector` and are resolved via `ConnectorRegistry`.
+  - Snapshots go through `scanning/results.record_snapshot`. Failed scans use `record_failure` and must not move a product's latest pointer.
+  - Cross-tenant background work only via the SECURITY DEFINER functions in migration 0006.
 - **Files:** go through `app.state.storage` (`sellerscope.storage`). Use app-generated keys only; never user file names.
 - Web data fetching uses TanStack Query. Tenant data query keys start with `["tenant", orgId, ...]`.
 

@@ -5,6 +5,7 @@ import { useState, type ReactNode } from "react";
 
 import { SessionProvider } from "@/components/session/session-provider";
 
+import { MockBanner } from "./mock-banner";
 import { OrgSwitcher } from "./org-switcher";
 import { Sidebar } from "./sidebar";
 import { UserMenu } from "./user-menu";
@@ -13,6 +14,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
     <SessionProvider>
+      <MockBanner />
       <div className="min-h-dvh lg:grid lg:grid-cols-[240px_1fr]">
         <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-[var(--border)] bg-[var(--surface)] px-4 lg:hidden">
           <span className="font-semibold">SellerScope</span>

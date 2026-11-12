@@ -224,3 +224,89 @@ export const ROW_STATUS_LABELS: Record<RowStatus, string> = {
   duplicate_in_file: "Duplicate in file",
   duplicate_existing: "Already in products",
 };
+
+// ---- Scans (mirrors apps/api/src/sellerscope/schemas/scans.py) ----
+
+export type JobStatus = "queued" | "running" | "completed" | "completed_with_errors" | "failed" | "cancelled";
+export type ItemStatus = "pending" | "processing" | "completed" | "partial" | "unavailable" | "failed" | "cancelled";
+
+export interface ScanJob {
+  id: string;
+  trigger: "manual" | "scheduled" | "extension" | "api";
+  status: JobStatus;
+  total_items: number;
+  completed_items: number;
+  failed_items: number;
+  unavailable_items: number;
+  cancelled_items: number;
+  requested_by: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  cancel_requested_at: string | null;
+}
+
+export interface ScanJobCreated extends ScanJob {
+  already_running: string[];
+  not_found: string[];
+}
+
+export interface ScanItem {
+  product_id: string;
+  external_id: string;
+  product_name: string | null;
+  status: ItemStatus;
+  attempt_count: number;
+  next_attempt_at: string | null;
+  last_error_code: string | null;
+  last_error_message: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  result: {
+    status: string;
+    data_source: string;
+    total_offer_count: number | null;
+    observed_offer_count: number;
+    unique_seller_count: number | null;
+    lowest_observed_price: string | null;
+    highest_observed_price: string | null;
+    currency: string | null;
+    limitations: string[];
+    error_code: string | null;
+  } | null;
+}
+
+export interface ScanQuota {
+  limit: number | null;
+  used: number;
+  remaining: number | null;
+  period_start: string;
+}
+
+export interface Meta {
+  environment: string;
+  version: string;
+  mock_connector_enabled: boolean;
+}
+
+export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
+  queued: "Queued",
+  running: "Running",
+  completed: "Completed",
+  completed_with_errors: "Completed with issues",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
+
+export const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
+  pending: "Waiting",
+  processing: "Scanning",
+  completed: "Done",
+  partial: "Done (partial data)",
+  unavailable: "Data unavailable",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
+
+export const ACTIVE_JOB: JobStatus[] = ["queued", "running"];
+export const MOCK_SOURCE = "MOCK";

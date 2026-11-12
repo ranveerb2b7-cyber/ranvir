@@ -23,5 +23,6 @@ export function formatDateTime(value: string | null | undefined): string | null 
 export function reasonText(reason: string | null | undefined): string | undefined {
   if (!reason) return undefined;
   if (reason === "no_scans_yet") return "No scans have run yet.";
+  if (reason === "change_tracking_not_available") return "Seller change tracking is not available yet.";
   return reason.charAt(0).toUpperCase() + reason.slice(1).replaceAll("_", " ") + ".";
 }

@@ -20,6 +20,10 @@ from sellerscope.schemas.products import DashboardSummary, MarketplaceBreakdown,
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 NO_SCANS = "no_scans_yet"
+CHANGE_TRACKING_OFF = "change_tracking_not_available"
+# Seller changes are detected by comparing consecutive scans (milestone M8). Until that runs,
+# the absence of "new seller" events says nothing, so the metric is unknown, not 0.
+CHANGE_TRACKING_ENABLED = False
 SUCCESS = (ScanResultStatus.OK, ScanResultStatus.PARTIAL)
 UNAVAILABLE = (ScanResultStatus.UNAVAILABLE, ScanResultStatus.ERROR, ScanResultStatus.NOT_FOUND)
 
@@ -81,7 +85,9 @@ async def summary(session: SessionDep, ctx: OrgDep) -> DashboardSummary:
         )
 
     new_sellers = Metric(value=None, reason=NO_SCANS)
-    if has_scans:
+    if has_scans and not CHANGE_TRACKING_ENABLED:
+        new_sellers = Metric(value=None, reason=CHANGE_TRACKING_OFF)
+    elif has_scans:
         count = (
             await session.execute(
                 select(func.count())

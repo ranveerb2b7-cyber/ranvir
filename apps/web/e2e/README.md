@@ -36,6 +36,13 @@ web app in Chromium:
 - commit, then history
 - a failed file (no ASIN column)
 
+`scans.e2e.mjs` covers:
+- the MOCK DATA banner
+- Scan now, processed by the worker
+- MOCK-labelled values in the table
+- dashboard metrics, with "new sellers" still not available
+- Scan all monitored, history and quota
+
 ## What the stub does not prove
 
 The stub implements only the endpoints our flows call: sign-up (auto-confirmed), password sign-in, refresh, get/update user, recover, logout. It signs HS256 tokens the same way GoTrue does.

@@ -67,6 +67,18 @@ class Settings(BaseSettings):
     upload_max_bytes: int = Field(default=10 * 1024 * 1024, gt=0)
     upload_max_rows: int = Field(default=50_000, gt=0)
 
+    # ---- Scanning engine ----
+    scan_max_attempts: int = Field(default=6, ge=1)
+    scan_backoff_base_s: float = Field(default=2.0, gt=0)
+    scan_backoff_cap_s: float = Field(default=300.0, gt=0)
+    # Rate-limit waits up to this long are slept in the worker; longer ones reschedule the job.
+    scan_inline_wait_max_s: float = Field(default=10.0, ge=0)
+    # A worker processes a job for at most this long, then re-queues it (fairness).
+    scan_run_budget_s: float = Field(default=240.0, gt=0)
+    # Items stuck in "processing" longer than this are returned to the queue.
+    scan_stale_after_s: int = Field(default=600, gt=0)
+    scan_schedule_batch: int = Field(default=500, gt=0)
+
     # ---- Rate limiting (Redis fixed window) ----
     rate_limit_enabled: bool = True
     rate_limit_ip_per_minute: int = Field(default=300, gt=0)

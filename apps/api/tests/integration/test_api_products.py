@@ -577,7 +577,11 @@ async def test_dashboard_with_scans(api: Api, owner_engine: AsyncEngine) -> None
     # B1 (partial, no seller ids) and C1 (unavailable) have no seller data.
     assert "excludes 2 product" in s["products_with_multiple_sellers"]["reason"]
     assert s["total_offers_observed"]["value"] == 7  # observed: 4 + 1 + 2 (not total 4+1+7)
-    assert s["new_sellers_detected_7d"]["value"] == 1  # the 30-day-old event is excluded
+    # Change tracking (M8) is not running yet, so "no events" must not read as zero new sellers.
+    assert s["new_sellers_detected_7d"] == {
+        "value": None,
+        "reason": "change_tracking_not_available",
+    }
     assert s["products_with_unavailable_data"]["value"] == 1
     assert s["last_scan_at"] is not None
     assert s["marketplaces"][0]["scanned"] == 4

@@ -254,5 +254,5 @@ With no context set, tenant queries return no rows.
 
 **Deferred to later milestones:**
 - **M3, invitation acceptance (done, migration `0004`):** `invitation_preview(token_hash)` and `accept_invitation(token_hash)` are `SECURITY DEFINER` functions with a fixed `search_path`, executable only by the app role. They act only on the single invitation matching the presented token hash, only for the signed-in user (`app.current_user_id`), and only if the invitation email equals that user's email. Acceptance locks the row, checks it isn't used, revoked or expired, and creates the membership. Memberships created this way get a random UUIDv4 id (PostgreSQL 16 has no UUIDv7 generator). The `invitations.role` CHECK now excludes `owner`.
-- **M6, scheduler:** Celery beat must find due products across all orgs. This will use a dedicated role or `SECURITY DEFINER` function that returns only `(organization_id, product_id)` pairs.
+- **M6, scheduler and reaper (done, migration `0006`):** these use three `SECURITY DEFINER` functions, `due_scan_products`, `reset_stale_scan_items` and `reset_stale_uploads`. They return only `(organization_id, id)` pairs; workers then act inside each organization's tenant context under RLS.
 - **Volume:** partitioning of snapshot tables is deferred until data volume requires it.

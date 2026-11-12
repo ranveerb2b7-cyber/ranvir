@@ -120,15 +120,68 @@ AUTH_SECRET = "integration-test-hs256-secret-32-bytes!!"  # test-only signing ke
 WEB_BASE = "http://web.test"
 
 
+class FakeClock:
+    """Controllable time for retry/backoff tests. `sleep` advances it instead of waiting."""
+
+    def __init__(self) -> None:
+        from datetime import UTC, datetime
+
+        self.now = datetime.now(UTC)
+
+    def __call__(self) -> Any:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        from datetime import timedelta
+
+        self.now += timedelta(seconds=seconds)
+
+    async def sleep(self, seconds: float) -> None:
+        self.advance(seconds)
+
+
 class InlineDispatcher:
-    """Runs upload parsing immediately instead of queueing it for a Celery worker."""
+    """Runs background work immediately instead of queueing it for a Celery worker.
+
+    Scan jobs run once per dispatch (no automatic re-runs for delayed retries); the delay a
+    real worker would wait is recorded in `scan_delays`. Set `defer_scans` to only record.
+    """
 
     def __init__(self, app: Any) -> None:
         self.app = app
+        self.clock = FakeClock()
+        self.defer_scans = False
+        self.scan_calls: list[tuple[uuid.UUID, uuid.UUID]] = []
+        self.parse_calls: list[tuple[uuid.UUID, uuid.UUID]] = []
+        self.scan_delays: list[float | None] = []
+
+    def scan_deps(self) -> Any:
+        from sellerscope.scanning.runner import ScanDeps
+
+        state = self.app.state
+        return ScanDeps(
+            session_factory=state.session_factory,
+            registry=state.connector_registry,
+            limiter=state.token_bucket,
+            storage=state.storage,
+            settings=state.settings,
+            clock=self.clock,
+            sleep=self.clock.sleep,
+        )
+
+    async def run_scan_job(
+        self, organization_id: uuid.UUID, job_id: uuid.UUID, countdown_s: float = 0
+    ) -> None:
+        from sellerscope.scanning.runner import run_job
+
+        self.scan_calls.append((organization_id, job_id))
+        if not self.defer_scans:
+            self.scan_delays.append(await run_job(self.scan_deps(), organization_id, job_id))
 
     async def parse_upload(self, organization_id: uuid.UUID, batch_id: uuid.UUID) -> None:
         from sellerscope.uploads.service import parse_batch
 
+        self.parse_calls.append((organization_id, batch_id))
         state = self.app.state
         await parse_batch(
             state.session_factory,
@@ -167,6 +220,7 @@ def api_settings(**overrides: Any) -> Settings:
         "rate_limit_ip_per_minute": 100_000,
         "storage_backend": "local",
         "storage_local_dir": _STORAGE_DIR,
+        "enable_mock_connector": True,
     }
     values.update(overrides)
     return Settings(**values)

@@ -13,12 +13,14 @@ from starlette.middleware.base import RequestResponseEndpoint
 from sellerscope import __version__
 from sellerscope.api.v1.router import api_router
 from sellerscope.auth.tokens import TokenVerifier
+from sellerscope.connectors.registry import ConnectorRegistry
 from sellerscope.core.config import AppEnv, Settings, get_settings
 from sellerscope.core.errors import AppError, problem, register_error_handlers
 from sellerscope.core.logging import configure_logging
 from sellerscope.core.middleware import RequestContextMiddleware
 from sellerscope.core.rate_limit import RateLimiter, client_ip
 from sellerscope.db.session import create_engine, create_session_factory
+from sellerscope.scanning.ratelimit import TokenBucket
 from sellerscope.services.mailer import SmtpMailer
 from sellerscope.storage import create_storage
 from sellerscope.uploads.dispatch import CeleryDispatcher
@@ -37,6 +39,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.session_factory = create_session_factory(engine)
         app.state.redis = Redis.from_url(settings.redis_url.get_secret_value())
         app.state.rate_limiter = RateLimiter(app.state.redis, enabled=settings.rate_limit_enabled)
+        app.state.token_bucket = TokenBucket(app.state.redis)
         try:
             yield
         finally:
@@ -57,6 +60,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.mailer = SmtpMailer(settings)
     app.state.storage = create_storage(settings)
     app.state.task_dispatcher = CeleryDispatcher()
+    app.state.connector_registry = ConnectorRegistry(settings)
 
     @app.middleware("http")
     async def ip_rate_limit(request: Request, call_next: RequestResponseEndpoint) -> Response:

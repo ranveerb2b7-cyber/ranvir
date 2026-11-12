@@ -10,7 +10,7 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 | **M3** ✅ | Auth + orgs + RBAC | Supabase JWT verification, `/me`, org creation, invitations, member management, permission dependency, audit log writes, API rate limiting; web login/register/forgot/reset/accept-invite pages, org switcher, Team page | Invalid/expired JWT → 401; viewer can't write → 403; cross-org access → 404 for **every** tenant endpoint (generated test matrix); invite flow e2e; password reset e2e (Mailpit) | Supabase project URL + anon key + JWT secret/JWKS (or local GoTrue) |
 | **M4** ✅ | Initial dashboard + product management | App shell with 9 nav items, product CRUD, ASIN/FSN validators, duplicate detection, product table (search/filter/sort/pagination), brand filter, bulk actions, KPI tiles wired to real (initially empty) data | Validator unit tests (valid/invalid/edge cases); duplicate → 409; table query tests; Playwright: add product, filter, paginate; empty states say "No scans yet", never 0 | none |
 | **M5** ✅ | Uploads | Template download, upload with size/type/magic-byte checks, async parse, preview accepted/rejected rows, dedupe (in file + existing), commit, history, rejected-rows CSV | Fixture files: valid, mixed, malformed, oversize, wrong type, macro-enabled `.xlsm` rejected, 50k rows within time budget; formula-injection-safe exports | none |
-| **M6** | Scanning engine + connector interfaces | Connector protocol and registry, **MockConnector (dev/test only, labelled)**, job/item state machine, Celery queues, token bucket, backoff, retries, cancellation, stale reaper, duplicate-scan guard, scan UI with live progress | Concurrency test: two scan requests for the same product → one 409; 429 → retried with backoff (fake clock); cancellation; production boot refuses the mock connector; failed items visible with reason | none |
+| **M6** ✅ | Scanning engine + connector interfaces | Connector protocol and registry, **MockConnector (dev/test only, labelled)**, job/item state machine, Celery queues, token bucket, backoff, retries, cancellation, stale reaper, duplicate-scan guard, scan UI with live progress | Concurrency test: two scan requests for the same product → one 409; 429 → retried with backoff (fake clock); cancellation; production boot refuses the mock connector; failed items visible with reason | none |
 | **M7** | Amazon connector | Spike (feasibility §6.7), LWA token handling, credential encryption (KMS/AES-GCM), OAuth connect flow (option A) + manual credentials (option B), getItemOffers(+Batch), catalog verification, parser, limitation codes, raw payload storage | Parser tests on recorded fixtures (1 seller, many sellers, >20 offers, not found, throttled); encryption round-trip + key rotation; live smoke test against a real account (manual, documented) | **Amazon seller account, SP-API developer registration, LWA client id/secret, refresh token** |
 | **M8** | Seller intelligence + history | Seller profiles, offer views, comparison, confidence, diff engine, history timeline, trends charts | Diff engine table-driven tests incl. truncated lists and failed scans **not** producing disappearance events; metrics never conflated | (M7) |
 | **M9** ⏸ deferred | Flipkart connector | Capability-limited connector, FSN validation, seller-API own-listing sub-connector and/or affiliate sub-connector **only if access is granted**, coverage messaging | Unavailable results recorded and displayed as unavailable; no competitor fields populated; capability-driven UI | Flipkart seller API app id/secret and/or affiliate credentials (optional) |
@@ -32,6 +32,7 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 | M3 | ✅ Complete (with stated limits) | See "M3 report" below |
 | M4 | ✅ Complete | See "M4 report" below |
 | M5 | ✅ Complete | See "M5 report" below |
+| M6 | ✅ Complete | See "M6 report" below |
 | M9 | ⏸ Deferred | Flipkart out of current scope |
 | Others | Not started | |
 
@@ -265,3 +266,59 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 - **S3** is verified against moto, not a real bucket. MinIO is in docker-compose but local dev uses the shared volume.
 - **Uploaded files are kept indefinitely.** Retention/cleanup arrives with M14 (data retention).
 - **Stuck uploads:** a batch whose worker job is lost stays `uploaded` (shown as "Queued"). A stale-job reaper arrives with the scanning engine in M6.
+
+### M6 report (2026-11-12)
+
+**Delivered**
+- **Connector contract** (`connectors/base.py`):
+  - capabilities (incl. list cap, batch size, rate), `OfferSnapshot` / `ObservedOffer`, limitation codes
+  - typed errors: `RateLimitedError` (with Retry-After), `TransientError` (retried), `PermanentError` (not retried)
+- **Registry:** resolves an authorized connector per organization; without one, scans are refused with a clear reason (409 `connector_unavailable`).
+- **MOCK connector:**
+  - deterministic scenarios (single seller, multi-seller, truncated at 20 like SP-API, not found, unavailable)
+  - every result has source `MOCK` and limitation `MOCK_DATA`; seller ids start with `MOCK`; no seller names (like SP-API)
+  - two independent guards keep it out of staging/production
+- **Scan jobs:**
+  - start (selection or all monitored), list, detail, items, cancel, retry-failed, monthly quota (per product scan, UTC month)
+  - duplicate concurrent scans are prevented by the database (`INSERT … ON CONFLICT DO NOTHING` on the partial unique index)
+- **Worker engine** (`scanning/runner.py`):
+  - items claimed with `FOR UPDATE SKIP LOCKED`, connector batching
+  - a Redis token bucket shared by all workers per connector key
+  - exponential backoff with full jitter that never undercuts Retry-After; max attempts
+  - permanent errors fail immediately; unexpected connector crashes are recorded and retried
+  - a time budget re-queues long jobs; delayed retries re-queue the Celery task with a countdown
+- **Results:**
+  - each completed scan writes an immutable snapshot plus offers and upserts seller profiles
+  - unique sellers = distinct seller ids, or **unknown** if any observed offer lacks one
+  - prices use landed price (listing + shipping)
+  - failures are written as `error` snapshots for history but **never replace the product's latest data**
+- **Maintenance:**
+  - Celery beat: scheduled scans every 15 min, picking monitored products whose interval has passed since their last *attempt*, capped to the remaining quota
+  - stale-work recovery every 5 min: items left `processing` by a dead worker, jobs whose queue message was lost, and M5 uploads stuck before preview
+  - the only cross-tenant access is 3 `SECURITY DEFINER` functions (migration `0006`) that return id pairs; they are not executable by PUBLIC
+- **Web:**
+  - "Scan now" (selection) and "Scan all monitored" on Product Mapping
+  - Scan History: job list with live progress and the monthly quota
+  - job page: live per-product status, attempts, retry times, errors, result summary, cancel, retry failed
+  - a red **MOCK DATA** banner on every page when the mock is enabled; MOCK badges on mock-sourced values
+- **Correction found during verification:** "New sellers detected" showed **0** before any change tracking existed. It is now *Not available* ("Seller change tracking is not available yet") until M8 builds the diff engine.
+
+**Verified**
+- **Backend: 220 tests pass.** Highlights:
+  - **Concurrency:** 5 concurrent scan requests for one product produce exactly one scan (one 202, four 409).
+  - **Retries:** Rate-limited, then timeout, then success with a **fake clock** (Retry-After honoured, too-early runs do nothing, 3 attempts).
+  - **Failures:** gives up after max attempts and keeps the previous good data; permanent errors are not retried; retry-failed; a crashing connector is recorded.
+  - **Control:** cancel with an in-flight item; monthly quota; no data source → refused; viewer can't scan.
+  - **Maintenance:** stale recovery for scans and uploads; the scheduler picks only due products and never double-schedules; maintenance functions are SECURITY DEFINER and not public.
+  - **Rate limiting:** token-bucket rate/burst checked against real Redis.
+- **Cross-tenant matrix:** now covers 35 organization-scoped routes, including all scan endpoints.
+- **Browser end-to-end:** 6 new steps pass (39 total), processed by the **real Celery worker** over Redis with the MOCK connector:
+  - MOCK banner, Scan now, then the job completes, then MOCK-labelled values in the table
+  - dashboard metrics; "new sellers" shown as not available
+  - Scan all monitored, history and quota
+- **Bug the e2e run found and fixed:** after a scan finished, Product Mapping showed pre-scan cached data. Finished scans now refresh product, dashboard and history data.
+
+**Not verified / remaining**
+- **No real marketplace data yet.** Amazon SP-API arrives in M7 (needs credentials).
+- **Beat schedule not run live:** the scheduler and reaper functions are tested directly; Celery beat itself wasn't run in this sandbox (it's in docker-compose).
+- **Retention:** raw payloads of mock scans are stored like real ones (retention is M14).

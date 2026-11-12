@@ -7,8 +7,8 @@ Marketplace seller mapping and intelligence SaaS for brand owners and manufactur
 | | |
 |---|---|
 | Scope | **Amazon.in only.** Flipkart deferred. |
-| Done | M0 planning, M1 foundation, M2 database schema (RLS isolation), M3 authentication, organizations, team & roles, M4 product management & dashboard, M5 Excel/CSV upload |
-| Next | M6 scanning engine |
+| Done | M0 planning, M1 foundation, M2 database schema (RLS isolation), M3 authentication, organizations, team & roles, M4 product management & dashboard, M5 Excel/CSV upload, M6 scanning engine (MOCK data only) |
+| Next | M7 Amazon SP-API connector (needs credentials) |
 
 No business features are complete yet. See [`docs/plan/08-milestones.md`](docs/plan/08-milestones.md) for progress and [`docs/plan/`](docs/plan/README.md) for the design.
 
@@ -53,6 +53,8 @@ make up
 Web: http://localhost:3000 · API docs: http://localhost:8000/docs · Mail (Mailpit): http://localhost:8025 · Auth (local GoTrue): http://localhost:54321/auth/v1
 
 Sign-up sends a confirmation email to Mailpit. Open it there to activate the account.
+
+To try scanning before Amazon credentials exist, set `ENABLE_MOCK_CONNECTOR=true` in `.env`. This is development only: every page then shows a red MOCK DATA banner, and staging/production refuse to start with it.
 
 Without Docker (services running locally; create the app role first, as `infra/docker/postgres/init/01-app-role.sh` does):
 
@@ -100,6 +102,7 @@ Backend integration tests need `TEST_DATABASE_URL` (a user with CREATEROLE; the 
 
 - `GET|POST /api/v1/products`, `POST /api/v1/products/validate`, `POST /api/v1/products/bulk`, `GET|PATCH|DELETE /api/v1/products/{id}`, `GET /api/v1/brands`
 - `GET /api/v1/dashboard/summary`
+- `POST /api/v1/scan-jobs`, `GET /api/v1/scan-jobs`, `GET /api/v1/scan-jobs/quota`, `GET /api/v1/scan-jobs/{id}`, `GET /api/v1/scan-jobs/{id}/items`, `POST /api/v1/scan-jobs/{id}/cancel`, `POST /api/v1/scan-jobs/{id}/retry-failed`, `GET /api/v1/meta`
 - `GET /api/v1/uploads/template`, `GET|POST /api/v1/uploads`, `GET /api/v1/uploads/{id}`, `GET /api/v1/uploads/{id}/rows`, `POST /api/v1/uploads/{id}/commit`, `POST /api/v1/uploads/{id}/discard`, `GET /api/v1/uploads/{id}/rejected.csv`
 
 Authentication: `Authorization: Bearer <Supabase access token>`. Organization-scoped endpoints also need `X-Organization-Id`.
