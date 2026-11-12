@@ -70,6 +70,20 @@ try {
     await shot(page, "01-login");
   });
 
+  await step("pages carry a nonce-based Content Security Policy", async () => {
+    const violations = [];
+    page.on("console", (m) => /Content.Security.Policy/i.test(m.text()) && violations.push(m.text()));
+    const first = await page.goto(`${BASE}/login`);
+    const csp = first.headers()["content-security-policy"] ?? "";
+    assert.match(csp, /script-src 'self' 'nonce-[A-Za-z0-9+/=]+' 'strict-dynamic'/);
+    assert.ok(!/script-src[^;]*'unsafe-inline'/.test(csp), csp);
+    assert.match(csp, /frame-ancestors 'none'/);
+    const second = await page.goto(`${BASE}/login`);
+    assert.notEqual(second.headers()["content-security-policy"], csp, "a fresh nonce per request");
+    await page.getByRole("button", { name: "Sign in" }).waitFor(); // hydrated: scripts allowed
+    assert.deepEqual(violations, []);
+  });
+
   await step("register and land on onboarding", async () => {
     await page.goto(`${BASE}/login`);
     await register(page, owner);

@@ -1,0 +1,20 @@
+environment          = "staging"
+route53_zone_name    = "example.in" # placeholder: your domain
+app_hostname         = "staging.example.in"
+api_hostname         = "api.staging.example.in"
+image_tag            = "replace-with-git-sha"
+alarm_email          = "ops@example.in"
+nat_gateways         = 1
+db_instance_class    = "db.t4g.small"
+db_multi_az          = false
+api_desired_count    = 1
+web_desired_count    = 1
+worker_desired_count = 1
+app_config = {
+  AUTH_JWT_ISSUER = "https://<staging-project-ref>.supabase.co/auth/v1"
+  AUTH_JWKS_URL   = "https://<staging-project-ref>.supabase.co/auth/v1/.well-known/jwks.json"
+  SMTP_HOST       = "email-smtp.ap-south-1.amazonaws.com"
+  SMTP_PORT       = "587"
+  SMTP_USERNAME   = "<ses-smtp-user>"
+  SMTP_FROM       = "SellerScope <no-reply@staging.example.in>"
+}

@@ -108,6 +108,14 @@ class Settings(BaseSettings):
     # How often MOCK listings drift (sellers rotate, prices move), in seconds. Dev/test only.
     mock_epoch_seconds: int = Field(default=600, gt=0)
 
+    # ---- Observability ----
+    # Bearer token Prometheus must send to /metrics (required in staging/production).
+    metrics_token: SecretStr | None = None
+    sentry_dsn: SecretStr | None = None
+    sentry_traces_sample_rate: float = Field(default=0.0, ge=0, le=1)
+    # Build identifier (e.g. the git commit), shown in errors and metrics.
+    release: str = "dev"
+
     # Readiness probe timeout for each dependency check, in seconds.
     health_check_timeout_s: float = 2.0
 
@@ -118,6 +126,11 @@ class Settings(BaseSettings):
     @property
     def is_production_like(self) -> bool:
         return self.app_env in (AppEnv.STAGING, AppEnv.PRODUCTION)
+
+    def _guard_production_settings(self) -> None:
+        problems = _problems(self)
+        if problems:
+            raise ValueError("Unsafe staging/production settings: " + "; ".join(problems))
 
     @model_validator(mode="after")
     def _guard_production(self) -> Settings:
@@ -133,12 +146,48 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "AUTH_JWKS_URL or AUTH_JWT_SECRET is required in staging/production."
                 )
+            self._guard_production_settings()
             if self.storage_backend != "s3" or not self.s3_bucket:
                 raise ValueError(
                     "STORAGE_BACKEND=s3 and S3_BUCKET are required in staging/production "
                     "(local disk storage is for development only)."
                 )
         return self
+
+
+def _https(url: str) -> bool:
+    return url.startswith("https://")
+
+
+def _problems(settings: Settings) -> list[str]:
+    """Production misconfigurations (each one a reason to refuse to start)."""
+    problems: list[str] = []
+    if not _https(settings.web_base_url):
+        problems.append("WEB_BASE_URL must use https://")
+    if settings.auth_jwt_issuer and not _https(settings.auth_jwt_issuer):
+        problems.append("AUTH_JWT_ISSUER must use https://")
+    if settings.auth_jwks_url and not _https(settings.auth_jwks_url):
+        problems.append("AUTH_JWKS_URL must use https://")
+    bad_origins = [o for o in settings.cors_origin_list if not _https(o) or "*" in o]
+    if bad_origins:
+        problems.append(f"CORS_ORIGINS must be explicit https:// origins: {bad_origins}")
+    secret = settings.auth_jwt_secret.get_secret_value() if settings.auth_jwt_secret else ""
+    if secret and len(secret) < 32:
+        problems.append("AUTH_JWT_SECRET must be at least 32 characters")
+    token = settings.metrics_token.get_secret_value() if settings.metrics_token else ""
+    if len(token) < 32:
+        problems.append("METRICS_TOKEN (at least 32 characters) is required")
+    if not settings.rate_limit_enabled:
+        problems.append("RATE_LIMIT_ENABLED must be true")
+    if not settings.smtp_starttls:
+        problems.append("SMTP_STARTTLS must be true (email credentials must not travel in clear)")
+    for name in ("database_url", "redis_url"):
+        value = getattr(settings, name).get_secret_value()
+        if "change-me" in value:
+            problems.append(f"{name.upper()} still uses a placeholder password")
+    if settings.log_level.upper() == "DEBUG":
+        problems.append("LOG_LEVEL=DEBUG is not allowed (it can log sensitive data)")
+    return problems
 
 
 @lru_cache

@@ -14,5 +14,10 @@
     "extension:build": "pnpm --filter @sellerscope/extension build",
     "extension:test": "pnpm --filter @sellerscope/extension test",
     "extension:typecheck": "pnpm --filter @sellerscope/extension typecheck"
+  },
+  "pnpm": {
+    "overrides": {
+      "minimatch@>=7.0.0 <11.0.1": "^11.0.1"
+    }
   }
 }

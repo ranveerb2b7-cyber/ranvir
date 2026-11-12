@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
+import { contentSecurityPolicy } from "@/lib/csp";
 import { isPublicPath } from "@/lib/routes";
 
 /**
@@ -8,7 +9,22 @@ import { isPublicPath } from "@/lib/routes";
  * to /login. Authorization itself is enforced by the API; this only gates page access.
  */
 export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  const nonce = btoa(crypto.randomUUID());
+  const csp = contentSecurityPolicy(nonce, {
+    dev: process.env.NODE_ENV === "development",
+    apiUrl: process.env.NEXT_PUBLIC_API_URL,
+    authUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  });
+  // Next reads the nonce from the request's CSP header and applies it to its scripts.
+  const next = () => {
+    const headers = new Headers(request.headers);
+    headers.set("x-nonce", nonce);
+    headers.set("content-security-policy", csp);
+    const res = NextResponse.next({ request: { headers } });
+    res.headers.set("Content-Security-Policy", csp);
+    return res;
+  };
+  let response = next();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !anonKey) {
@@ -20,7 +36,7 @@ export async function proxy(request: NextRequest) {
       getAll: () => request.cookies.getAll(),
       setAll: (toSet, headers) => {
         for (const { name, value } of toSet) request.cookies.set(name, value);
-        response = NextResponse.next({ request });
+        response = next();
         for (const { name, value, options } of toSet) response.cookies.set(name, value, options);
         for (const [key, value] of Object.entries(headers ?? {})) response.headers.set(key, value);
       },

@@ -71,7 +71,8 @@ def _walk(items: list[Any], prefix: str = "") -> Iterator[tuple[str, APIRoute]]:
     """Flattens nested routers (FastAPI keeps included routers as nested objects)."""
     for item in items:
         if isinstance(item, APIRoute):
-            yield prefix + item.path, item
+            if item.include_in_schema:  # /metrics: operator endpoint (test_observability.py)
+                yield prefix + item.path, item
         elif hasattr(item, "original_router"):
             yield from _walk(item.original_router.routes, prefix + item.include_context.prefix)
 

@@ -37,6 +37,7 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 | M10 | ✅ Complete: in-app + email. Signed webhooks moved to M7. | See "M10 report" below |
 | M11 | ✅ Complete: authenticated downloads instead of signed URLs (see report) | See "M11 report" below |
 | M12 | ✅ Complete: not yet published to the Chrome Web Store | See "M12 report" below |
+| M14 | 🟡 Partly complete: everything that can run without a cloud account is built and verified; the infrastructure is written and validated but not applied; launch gaps listed | See "M14 report" below |
 | M9 | ⏸ Deferred | Flipkart out of current scope |
 | M7 | ⏳ Waiting for Amazon credentials | |
 | Others | Not started | |
@@ -532,3 +533,56 @@ Built before M7, on MOCK data. Rules read the scan results and change events tha
 - **Real Chrome window:** the toolbar popup itself isn't opened by the e2e test; the test opens `popup.html` as a page, with the tab chosen by a test parameter. The logic is identical, but popup sizing in real Chrome was checked visually only from screenshots.
 - **Not built:** Flipkart detection (out of scope); adding a product from the extension (it links to SellerScope instead).
 - **No real Amazon data yet:** data is MOCK until M7.
+
+### M14 report (2026-11-12)
+
+**Delivered and verified locally**
+- **Observability:**
+  - Prometheus `/metrics`, behind a bearer token, with HTTP request counts and latency by route template (bounded labels).
+  - Scrape-time gauges for scan backlog and failures, alert emails, report exports and Celery queue lengths. They come from `ops_metrics()` (migration 0010, SECURITY DEFINER, counts only).
+  - Optional Sentry for the API and workers, with no PII and no request bodies.
+- **Production configuration guard:** staging/production refuse to start on any of these:
+  - non-https URLs or CORS origins
+  - a missing or short `METRICS_TOKEN`
+  - a short JWT secret
+  - rate limiting off
+  - SMTP without STARTTLS
+  - placeholder passwords
+  - `LOG_LEVEL=DEBUG`
+
+  This adds to the existing mock-connector, authentication and S3 checks; there are 22 new parametrised tests.
+- **Security:**
+  - The web app now has a nonce-based Content Security Policy (no `unsafe-inline` scripts, `frame-ancestors 'none'`), plus Permissions-Policy and HSTS. The browser test checks the header, the fresh nonce per request, and that there are no CSP violations; all browser tests pass under it.
+  - API: `default-src 'none'` CSP, `Cache-Control: no-store`, HSTS and CORP.
+  - Email subjects are stripped of line breaks (header injection).
+  - Dependency audits: `pip-audit` (production and dev) and `pnpm audit` are both clean. The one finding, `minimatch` in dev lint tooling, is fixed with an override. A `security` CI job runs them on every push.
+  - OWASP ASVS L2 self-assessment: docs/plan/10.
+- **Backups:** `ops/backup/backup.sh`, `restore.sh` (refuses non-empty targets, verifies the checksum) and `drill.sh`.
+  - The drill was **run: PASSED**, comparing the migration version, row counts of every table, RLS, policies, SECURITY DEFINER functions, append-only triggers and app-role grants between source and restored copy.
+- **Load test:** `ops/loadtest` (locust, seeding through the real upload and scan path), run locally:
+  - 50 users: 44.7 req/s, p95 28 ms, 0 errors.
+  - 300 users: 184.8 req/s, p95 470 ms, 0 errors.
+  - Targets: p95 ≤ 500 ms, < 1% errors. Results and caveats in runbooks/load-testing.md.
+- **Docs:**
+  - runbooks: deploy, backup-restore, incident response (CERT-In 6 hours, DPDP, Amazon 24 hours), observability with PromQL alert rules, load testing, secrets rotation
+  - the compliance checklist (DPDP, CERT-In, Amazon SP-API policies): docs/plan/11
+
+**Written and validated, not applied (needs your AWS account, domain and KMS)**
+- **Terraform for ap-south-1** (`infra/terraform`, staging and production variable files):
+  - VPC, RDS PostgreSQL 16 (KMS, TLS-only, PITR 14/35 days, Multi-AZ in production)
+  - ElastiCache Redis (TLS + AUTH), S3 (SSE-KMS, TLS-only, versioning, lifecycle)
+  - ECR (immutable tags, scan on push), ECS Fargate services with a circuit breaker, beat stop-then-start
+  - ALB with TLS 1.2+ and `/metrics` blocked, ACM and Route 53
+  - CloudWatch alarms to SNS; least-privilege IAM; secrets from Secrets Manager
+- `terraform fmt` and `validate` pass locally and in CI. Nothing has been planned or applied against AWS.
+
+**Not met yet (from the milestone's acceptance criteria and launch readiness)**
+- **Load test against staging:** not possible until it exists. The local numbers don't predict production capacity.
+- **Restore drill against an RDS point-in-time restore:** only the local logical backup/restore drill has run.
+- **ASVS L2 gaps:**
+  - MFA for owners/admins
+  - data retention and deletion jobs (organization purge, raw-payload expiry) and self-service account deletion (also DPDP)
+  - an independent penetration test
+  - a written threat model
+- **DPDP:** privacy notice and consent at sign-up, data export, grievance officer, DPAs (legal drafting needed).
+- **Staging environment:** defined in Terraform but not created.

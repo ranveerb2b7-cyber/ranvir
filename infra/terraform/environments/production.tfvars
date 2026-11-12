@@ -1,0 +1,25 @@
+environment              = "production"
+route53_zone_name        = "example.in" # placeholder: your domain
+app_hostname             = "app.example.in"
+api_hostname             = "api.example.in"
+image_tag                = "replace-with-git-sha"
+alarm_email              = "ops@example.in"
+vpc_cidr                 = "10.41.0.0/16"
+nat_gateways             = 2
+db_instance_class        = "db.m7g.large"
+db_multi_az              = true
+db_backup_retention_days = 35
+redis_node_type          = "cache.m7g.large"
+api_desired_count        = 2
+web_desired_count        = 2
+worker_desired_count     = 2
+api_cpu                  = 1024
+api_memory               = 2048
+app_config = {
+  AUTH_JWT_ISSUER = "https://<prod-project-ref>.supabase.co/auth/v1"
+  AUTH_JWKS_URL   = "https://<prod-project-ref>.supabase.co/auth/v1/.well-known/jwks.json"
+  SMTP_HOST       = "email-smtp.ap-south-1.amazonaws.com"
+  SMTP_PORT       = "587"
+  SMTP_USERNAME   = "<ses-smtp-user>"
+  SMTP_FROM       = "SellerScope <no-reply@example.in>"
+}

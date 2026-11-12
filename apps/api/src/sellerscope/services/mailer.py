@@ -35,6 +35,7 @@ class SmtpMailer:
 def build_message(to: str, subject: str, body: str) -> EmailMessage:
     message = EmailMessage()
     message["To"] = to
-    message["Subject"] = subject
+    # Subjects contain user-supplied names: no line breaks (header injection), bounded length.
+    message["Subject"] = " ".join(subject.split())[:200]
     message.set_content(body)
     return message

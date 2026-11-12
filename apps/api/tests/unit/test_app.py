@@ -69,9 +69,27 @@ async def test_docs_disabled_in_production() -> None:
             auth_jwks_url="https://auth.example/auth/v1/.well-known/jwks.json",
             storage_backend="s3",
             s3_bucket="sellerscope-prod",
+            web_base_url="https://app.sellerscope.example",
+            cors_origins="https://app.sellerscope.example",
+            metrics_token="m" * 40,
+            smtp_starttls=True,
+            database_url="postgresql+asyncpg://app:prod-secret@db.internal/sellerscope",
+            redis_url="rediss://:prod-secret@cache.internal:6379/0",
         )
     )
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         assert (await c.get("/api/v1/openapi.json")).status_code == 404
         assert (await c.get("/docs")).status_code == 404
+
+
+async def test_security_headers_on_api_responses(client: AsyncClient) -> None:
+    r = await client.get("/api/v1/health/live")
+    assert r.headers["content-security-policy"] == "default-src 'none'; frame-ancestors 'none'"
+    assert r.headers["cache-control"] == "no-store"
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert r.headers["x-frame-options"] == "DENY"
+    assert r.headers["strict-transport-security"].startswith("max-age=")
+    # Swagger UI (development only) loads its own scripts, so it is exempt from the API CSP.
+    docs = await client.get("/docs")
+    assert docs.status_code == 200 and "content-security-policy" not in docs.headers

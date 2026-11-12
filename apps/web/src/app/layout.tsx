@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import type { ReactNode } from "react";
 
 import { Providers } from "@/components/providers";
@@ -10,7 +11,9 @@ export const metadata: Metadata = {
   description: "Marketplace seller mapping and intelligence for brands on Amazon India.",
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // Render per request so Next can attach the CSP nonce (set in proxy.ts) to its scripts.
+  await connection();
   return (
     <html lang="en">
       <body className="font-sans antialiased">

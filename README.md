@@ -7,7 +7,7 @@ Marketplace seller mapping and intelligence SaaS for brand owners and manufactur
 | | |
 |---|---|
 | Scope | **Amazon.in only.** Flipkart deferred. |
-| Done | M0 planning, M1 foundation, M2 database schema (RLS isolation), M3 authentication, organizations, team & roles, M4 product management & dashboard, M5 Excel/CSV upload, M6 scanning engine, M8 seller intelligence & change history, M10 alerts (in-app + email), M11 reports (Excel/CSV exports), M12 Chrome extension (MOCK data until M7) |
+| Done | M0 planning, M1 foundation, M2 database schema (RLS isolation), M3 authentication, organizations, team & roles, M4 product management & dashboard, M5 Excel/CSV upload, M6 scanning engine, M8 seller intelligence & change history, M10 alerts (in-app + email), M11 reports (Excel/CSV exports), M12 Chrome extension, M14 production hardening (partly: cloud parts not applied; see docs/plan/08) (MOCK data until M7) |
 | Next | M7 Amazon SP-API connector (waiting for credentials) |
 
 No business features are complete yet. See [`docs/plan/08-milestones.md`](docs/plan/08-milestones.md) for progress and [`docs/plan/`](docs/plan/README.md) for the design.
@@ -34,7 +34,10 @@ The web app needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 apps/api   FastAPI API + Celery workers (Python 3.12+, uv)
 apps/web   Next.js 16 dashboard (TypeScript, Tailwind 4)
 apps/extension  Chrome MV3 extension (see apps/extension/README.md)
-docs/plan  Architecture, ERD, API plan, feasibility, milestones, security
+docs/plan  Architecture, ERD, API plan, feasibility, milestones, security, ASVS + compliance checklists
+docs/runbooks  Deploy, backup/restore, incidents, observability, load testing, secrets
+infra/terraform  AWS ap-south-1 (validated, not yet applied)
+ops  Backup/restore drill and load-test scripts
 ```
 
 ## Local development

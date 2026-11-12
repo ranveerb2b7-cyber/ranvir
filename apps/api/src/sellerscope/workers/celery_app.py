@@ -6,12 +6,13 @@ from celery import Celery
 from kombu.entity import Queue
 
 from sellerscope.core.config import get_settings
-
-QUEUES = ("default", "imports", "scans.amazon", "reports", "alerts")
+from sellerscope.core.observability import init_sentry
+from sellerscope.workers.queues import QUEUES
 
 
 def create_celery() -> Celery:
     settings = get_settings()
+    init_sentry(settings, component="worker")
     redis_url = settings.redis_url.get_secret_value()
     app = Celery(
         "sellerscope",

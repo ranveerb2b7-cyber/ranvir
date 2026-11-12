@@ -18,6 +18,7 @@ from sellerscope.core.config import AppEnv, Settings, get_settings
 from sellerscope.core.errors import AppError, problem, register_error_handlers
 from sellerscope.core.logging import configure_logging
 from sellerscope.core.middleware import RequestContextMiddleware
+from sellerscope.core.observability import init_sentry, install
 from sellerscope.core.rate_limit import RateLimiter, client_ip
 from sellerscope.db.session import create_engine, create_session_factory
 from sellerscope.scanning.ratelimit import TokenBucket
@@ -31,6 +32,7 @@ API_PREFIX = "/api/v1"
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level, json=settings.app_env != AppEnv.DEVELOPMENT)
+    init_sentry(settings, component="api")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -86,5 +88,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.add_middleware(RequestContextMiddleware)
     register_error_handlers(app)
+    install(app, settings)  # /metrics + HTTP metrics
     app.include_router(api_router, prefix=API_PREFIX)
     return app

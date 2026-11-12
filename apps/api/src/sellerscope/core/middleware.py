@@ -29,4 +29,12 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
+        # The API serves data, never pages: nothing may be framed, run or cached by proxies.
+        if not request.url.path.startswith("/docs"):  # Swagger UI (development only)
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'none'; frame-ancestors 'none'"
+            )
+        response.headers.setdefault("Cache-Control", "no-store")
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+        response.headers["Cross-Origin-Resource-Policy"] = "same-site"
         return response
