@@ -165,6 +165,7 @@ class ReportType(StrEnum):
     SELLER = "seller"
     SCAN_SUMMARY = "scan_summary"
     ERRORS = "errors"
+    ALERTS = "alerts"
 
 
 class ReportFormat(StrEnum):

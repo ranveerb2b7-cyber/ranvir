@@ -79,6 +79,12 @@ class Settings(BaseSettings):
     scan_stale_after_s: int = Field(default=600, gt=0)
     scan_schedule_batch: int = Field(default=500, gt=0)
 
+    # ---- Report exports ----
+    report_retention_days: int = Field(default=7, ge=1)
+    report_max_rows: int = Field(default=100_000, gt=0)
+    # Queued + running exports allowed per organization at once.
+    report_max_active: int = Field(default=3, gt=0)
+
     # ---- Alert email delivery ----
     alert_delivery_max_attempts: int = Field(default=5, ge=1)
     # Retry n waits base * 2^(n-1) seconds, capped at one hour.

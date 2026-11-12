@@ -97,6 +97,11 @@ async def recover_stale_work(
         await dispatcher.run_scan_job(org, job)
     for org, batch in uploads:
         await dispatcher.parse_upload(org, batch)
+    from sellerscope.reports.service import recover_stale_reports
+
+    reports = await recover_stale_reports(session_factory, dispatcher, stale_after_s=stale_after_s)
+    if reports:
+        log.warning("stale_reports_recovered", reports=reports)
     if jobs or uploads:
         log.warning("stale_work_recovered", scan_jobs=len(jobs), uploads=len(uploads))
     return len(jobs), len(uploads)

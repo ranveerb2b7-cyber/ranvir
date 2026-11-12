@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -186,7 +187,11 @@ class ReportExport(UUIDPk, TenantOwned, Timestamps, Base):
     )
     storage_key: Mapped[str | None] = mapped_column(Text)
     row_count: Mapped[int | None] = mapped_column(Integer)
+    size_bytes: Mapped[int | None] = mapped_column(Integer)
+    # True when any row came from the MOCK connector (the file says so, too).
+    contains_mock: Mapped[bool | None] = mapped_column(Boolean)
     error_message: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

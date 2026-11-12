@@ -35,6 +35,7 @@ Status: **Approved, Amazon-only scope (2026-11-11).** Each milestone follows the
 | M6 | ✅ Complete | See "M6 report" below |
 | M8 | ✅ Complete (before M7, on MOCK data) | See "M8 report" below |
 | M10 | ✅ Complete: in-app + email. Signed webhooks moved to M7. | See "M10 report" below |
+| M11 | ✅ Complete: authenticated downloads instead of signed URLs (see report) | See "M11 report" below |
 | M9 | ⏸ Deferred | Flipkart out of current scope |
 | M7 | ⏳ Waiting for Amazon credentials | |
 | Others | Not started | |
@@ -408,3 +409,61 @@ Built before M7, on MOCK data. Rules read the scan results and change events tha
   - per-user notification preferences and unsubscribe links (recipients are chosen per rule)
   - alert history export (M11 reports)
 - **No real Amazon data yet:** alerts reflect MOCK data until M7.
+
+### M11 report (2026-11-12)
+
+**Delivered**
+- **Seven reports, each as Excel or CSV:**
+  - Products (one row per product: latest data, last scan attempt, notes)
+  - Brands
+  - Sellers (with your labels, current products and Buy Box holds)
+  - Marketplace summary
+  - Scan summary
+  - Errors and unavailable
+  - Alert history (added for M10)
+- **Filters:** brand and monitoring, seller tag and "offering now", and UTC date ranges (default 30 days, max 366) with alert status.
+- **Background generation:**
+  - Reports are built in the `reports` Celery queue, in a read-only transaction under the organization's tenant context.
+  - At most 3 in progress per organization.
+  - A 100,000-row cap fails the export with a clear message.
+  - Any failure is recorded on the export and shown in the app.
+  - Lost or stuck exports are re-queued by the existing reaper. Files expire after 7 days (hourly beat task).
+  - Two new SECURITY DEFINER functions, migration 0008.
+- **Data honesty:**
+  - Unknown values are empty cells, never 0, and each row's Notes column says why (for example "Not scanned yet.", not found, cut-off list = lower bound, seller IDs missing, or "latest scan failed; data is from the previous scan").
+  - Reported, observed and unique counts stay separate columns.
+  - MOCK data is labelled per row, in the Excel "About" sheet, and in the app.
+- **Security:**
+  - Formula injection is neutralised in CSV (apostrophe prefix) and Excel (typed text cells).
+  - Files use app-generated storage keys.
+  - Downloads are streamed only to signed-in members, with `no-store`.
+  - Create, download and delete are audited.
+  - Delete is allowed for the requester or an admin.
+- **Changed from the plan:** no signed download URLs. A signed URL works for anyone who has it, and it can leak through browser history, logs or chat. Authenticated downloads avoid that and make every download auditable. Files are small enough to stream through the API.
+- **Web:** Reports page with a form (type, format, type-specific filters), a history table with status, MOCK badge, rows, size and expiry, download, delete, auto-refresh, and a phone layout.
+
+**Verified**
+- **Backend: 278 tests pass.**
+  - 8 unit tests for the writers and filters: blanks vs. real zeros, Indian-time to UTC conversion, five formula-injection payloads in CSV and Excel, filter validation.
+  - 7 integration tests:
+    - every report type compared with known scan data (OK, not found, never scanned, failed after success, cut-off list)
+    - an Excel cell check
+    - MOCK labelling
+    - permissions (viewer exports; analyst can't delete others' exports; owner can)
+    - audit rows
+    - validation, the in-progress limit and stale recovery
+    - expiry (410, file deleted)
+    - the row cap and a builder crash, both recorded on the export
+    - the functions are SECURITY DEFINER and not executable by PUBLIC
+- **Cross-tenant matrix:** 61 organization-scoped routes (5 new), and the snapshot covers exports.
+- **Web: 44 unit tests pass.**
+- **Browser end-to-end: 6 new steps pass (62 total).** The real worker prepares the files, the browser downloads them, and the test checks the CSV contents.
+- **Issues found and fixed while testing:** a SQLAlchemy deprecation (DISTINCT ON), surfaced by running with warnings as errors; and on phones the Download button sat off-screen, so less important columns are now hidden at that width.
+
+**Not verified / remaining**
+- **S3 in production:** the download path was tested with local storage only (S3 is covered by moto unit tests from M5).
+- **Not built:**
+  - scheduled or emailed reports
+  - per-report column choice
+  - PDF output
+- **No real Amazon data yet:** reports contain MOCK data until M7.

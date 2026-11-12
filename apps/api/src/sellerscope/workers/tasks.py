@@ -23,6 +23,8 @@ from sellerscope.uploads.dispatch import (
     ALERTS_TASK,
     IMPORTS_QUEUE,
     PARSE_TASK,
+    REPORT_TASK,
+    REPORTS_QUEUE,
     SCAN_TASK,
     SCANS_QUEUE,
     CeleryDispatcher,
@@ -145,5 +147,34 @@ def deliver_due() -> int:
 
     async def go(settings: Settings, factory: async_sessionmaker[AsyncSession]) -> int:
         return await deliver_all_due(factory, SmtpMailer(settings), settings, now=utcnow())
+
+    return asyncio.run(_with_db(go))
+
+
+@celery_app.task(name=REPORT_TASK, queue=REPORTS_QUEUE, acks_late=True)
+def generate_report(organization_id: str, report_id: str) -> str:
+    """Builds one report export (failures are recorded on the export)."""
+    from sellerscope.reports.service import generate_report as run
+
+    async def go(settings: Settings, factory: async_sessionmaker[AsyncSession]) -> str:
+        return await run(
+            factory,
+            create_storage(settings),
+            settings,
+            organization_id=uuid.UUID(organization_id),
+            report_id=uuid.UUID(report_id),
+            now=utcnow(),
+        )
+
+    return asyncio.run(_with_db(go))
+
+
+@celery_app.task(name="reports.expire")
+def expire_reports() -> int:
+    """Beat: deletes report files past their retention."""
+    from sellerscope.reports.service import expire_reports as run
+
+    async def go(settings: Settings, factory: async_sessionmaker[AsyncSession]) -> int:
+        return await run(factory, create_storage(settings))
 
     return asyncio.run(_with_db(go))

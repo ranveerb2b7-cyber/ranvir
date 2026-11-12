@@ -26,6 +26,7 @@ from sellerscope.core.config import Settings
 from sellerscope.core.errors import AppError, not_found
 from sellerscope.models import ProductBatch, ProductBatchRow
 from sellerscope.models.enums import BatchRowStatus
+from sellerscope.reports.writers import csv_safe
 from sellerscope.schemas.uploads import (
     BatchDetail,
     BatchOut,
@@ -54,12 +55,6 @@ router = APIRouter(prefix="/uploads", tags=["uploads"])
 WriteProducts = Annotated[OrgContext, Depends(require(Permission.PRODUCTS_WRITE))]
 
 TEMPLATE_COLUMNS = ("ASIN", "Product name", "Brand")
-FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
-
-
-def csv_safe(value: str) -> str:
-    """Neutralise spreadsheet formula injection (CSV injection) in exported cells."""
-    return f"'{value}" if value.startswith(FORMULA_PREFIXES) else value
 
 
 # ------------------------------------------------------------------------------ template

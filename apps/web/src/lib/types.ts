@@ -516,3 +516,32 @@ export interface AlertSummary {
   open_by_severity: Record<AlertSeverity, number>;
   failed_deliveries: number;
 }
+
+// ---- Reports (M11) ----
+
+export type ReportType = "product" | "marketplace" | "brand" | "seller" | "scan_summary" | "errors" | "alerts";
+export type ReportFormat = "csv" | "xlsx";
+export type ReportStatus = "queued" | "running" | "completed" | "failed" | "expired";
+
+export interface ReportExport {
+  id: string;
+  report_type: ReportType;
+  format: ReportFormat;
+  filters: Record<string, unknown>;
+  status: ReportStatus;
+  requested_by: string | null;
+  requested_by_email: string | null;
+  row_count: number | null;
+  size_bytes: number | null;
+  contains_mock: boolean | null;
+  error_message: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  expires_at: string | null;
+  file_name: string | null;
+}
+
+export interface ReportPage extends Page<ReportExport> {
+  retention_days: number;
+}

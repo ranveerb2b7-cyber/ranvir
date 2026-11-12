@@ -166,11 +166,35 @@ Implemented in M10. Alerts come only from rule evaluation after each scan, in th
 **Threshold rules** have at most one unresolved alert per rule and product. They fire only on values known to cross the threshold, for example a lower-bound seller count from a cut-off list that is already above it. They resolve automatically only when complete data proves the condition cleared. Unknown values neither fire nor resolve.
 
 ## Reports
+Implemented in M11. Every active member may export their organization's data. Exports and downloads are audited.
+
 | Method | Path | Purpose | Perm |
 |---|---|---|---|
-| POST | /reports | `{type: product\|marketplace\|brand\|seller\|scan_summary\|errors, format: xlsx\|csv, filters}` → async export | member |
-| GET | /reports | Export history | member |
-| GET | /reports/{id}/download | Short-lived signed URL | member |
+| POST | /reports | `{report_type, format: xlsx\|csv, filters}` → 202. The export is prepared by the `reports` worker queue. At most 3 queued or running per organization (409). | member |
+| GET | /reports?page= | Export history, newest first, with requester, rows, size and expiry | member |
+| GET | /reports/{id} | One export, including the failure reason if it failed | member |
+| GET | /reports/{id}/download | The file, streamed through the API with `Cache-Control: no-store`. 409 if not ready, 410 if expired. | member |
+| DELETE | /reports/{id} | The export and its file. Allowed for the requester or an admin; 409 while running. | member |
+
+**Report types and filters**
+| Type | Filters | Rows |
+|---|---|---|
+| `product` | `brand` (`__none__` = no brand), `monitoring` | One per product: latest data, last scan attempt, notes |
+| `brand` | none | One per brand |
+| `seller` | `tag`, `currently_offering` | One per seller profile |
+| `marketplace` | none | One per enabled marketplace |
+| `scan_summary` | `date_from`, `date_to` (UTC, inclusive; default last 30 days; max 366 days) | One per scan job |
+| `errors` | `date_from`, `date_to` | One per failed, unavailable or not-found scan result |
+| `alerts` | `date_from`, `date_to`, `status` | One per alert |
+
+**Design notes**
+- **No shareable links:** the plan proposed signed download URLs. Downloads instead go through the authenticated API, so a leaked link can't expose data, and each download is audited.
+- **Retention:** files are kept for `REPORT_RETENTION_DAYS` (default 7). Then the beat task marks the export expired and deletes the file.
+- **Missing values:** unknown values are empty cells, never 0, and a Notes column explains why.
+- **MOCK data:** labelled in rows, in the XLSX "About" sheet, and in the API (`contains_mock`).
+- **Formula injection:**
+  - CSV: text starting with `= + - @`, a tab or a carriage return gets an apostrophe prefix.
+  - XLSX: text cells are typed as strings, so they're never evaluated as formulas.
 
 ## Chrome extension
 | Method | Path | Purpose | Perm |

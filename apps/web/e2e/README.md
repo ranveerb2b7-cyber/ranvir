@@ -56,6 +56,12 @@ web app in Chromium:
 - acknowledge, resolve, status filter, bulk acknowledge, disabling a rule
 - the open-alerts badge and dashboard tile, and the inbox at phone width
 
+`reports.e2e.mjs` covers:
+- a Products report as CSV prepared by the worker's `reports` queue, then downloaded. Checked in the file: MOCK labelling, blank cells with "Not scanned yet." (no invented zeros), and a neutralised `=` formula
+- the same report as Excel
+- the scan summary report, and the error shown for an invalid date range
+- deleting a report, and the page at phone width
+
 ## What the stub does not prove
 
 The stub implements only the endpoints our flows call: sign-up (auto-confirmed), password sign-in, refresh, get/update user, recover, logout. It signs HS256 tokens the same way GoTrue does.

@@ -12,6 +12,8 @@ SCAN_TASK = "scans.run_job"
 SCANS_QUEUE = "scans.amazon"
 ALERTS_TASK = "alerts.deliver"
 ALERTS_QUEUE = "alerts"
+REPORT_TASK = "reports.generate"
+REPORTS_QUEUE = "reports"
 
 
 class TaskDispatcher(Protocol):
@@ -22,6 +24,8 @@ class TaskDispatcher(Protocol):
     ) -> None: ...
 
     async def deliver_alerts(self, organization_id: uuid.UUID) -> None: ...
+
+    async def generate_report(self, organization_id: uuid.UUID, report_id: uuid.UUID) -> None: ...
 
 
 class CeleryDispatcher:
@@ -42,3 +46,6 @@ class CeleryDispatcher:
 
     async def deliver_alerts(self, organization_id: uuid.UUID) -> None:
         await self._send(ALERTS_TASK, [str(organization_id)], ALERTS_QUEUE)
+
+    async def generate_report(self, organization_id: uuid.UUID, report_id: uuid.UUID) -> None:
+        await self._send(REPORT_TASK, [str(organization_id), str(report_id)], REPORTS_QUEUE)

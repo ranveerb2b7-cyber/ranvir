@@ -60,7 +60,7 @@ API_ENV=(APP_ENV=development ENABLE_MOCK_CONNECTOR=true MOCK_EPOCH_SECONDS=5 RAT
   WEB_BASE_URL=http://localhost:3100 CORS_ORIGINS=http://localhost:3100 SMTP_HOST=127.0.0.1 SMTP_PORT=1025)
 # Celery worker: parses uploads exactly as in production (no inline shortcut).
 (cd "$API" && exec env "${API_ENV[@]}" uv run celery -A sellerscope.workers.celery_app worker \
-  -Q imports,scans.amazon,alerts,default -c 2 --loglevel=INFO) >"$WORK/logs/worker.log" 2>&1 &
+  -Q imports,scans.amazon,alerts,reports,default -c 2 --loglevel=INFO) >"$WORK/logs/worker.log" 2>&1 &
 pids+=($!)
 (cd "$API" && APP_ENV=development ENABLE_MOCK_CONNECTOR=true MOCK_EPOCH_SECONDS=5 RATE_LIMIT_IP_PER_MINUTE=3000 \
   DATABASE_URL="postgresql+asyncpg://$APP_ROLE:$APP_PW@$PG_HOSTPORT/$DB" REDIS_URL="$REDIS_URL" \
@@ -86,5 +86,5 @@ export E2E_BASE_URL=http://localhost:3100 E2E_API_URL=http://localhost:8000/api/
   E2E_AUTH_URL=http://127.0.0.1:9999/auth/v1 E2E_MAILDIR="$WORK/maildir" E2E_SCREENSHOTS="$WORK/shots"
 export E2E_WORKDIR="$WORK"
 (cd "$WEB" && node e2e/accounts.e2e.mjs && node e2e/products.e2e.mjs && node e2e/uploads.e2e.mjs \
-  && node e2e/scans.e2e.mjs && node e2e/intel.e2e.mjs && node e2e/alerts.e2e.mjs)
+  && node e2e/scans.e2e.mjs && node e2e/intel.e2e.mjs && node e2e/alerts.e2e.mjs && node e2e/reports.e2e.mjs)
 echo "logs and screenshots: $WORK"

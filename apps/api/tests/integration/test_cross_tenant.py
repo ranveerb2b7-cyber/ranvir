@@ -51,6 +51,7 @@ BODIES: dict[tuple[str, str], dict[str, Any]] = {
     ("POST", "/api/v1/alert-rules"): {"name": "Intruder", "rule_type": "new_seller"},
     ("PATCH", "/api/v1/alert-rules/{rule_id}"): {"name": "Hijacked", "is_enabled": False},
     ("POST", "/api/v1/alerts/bulk"): {"ids": ["{alert_id}"], "action": "resolve"},
+    ("POST", "/api/v1/reports"): {"report_type": "product", "format": "csv"},
 }
 
 
@@ -167,6 +168,16 @@ async def _alert(client: AsyncClient, user: AppUser, org: str) -> str:
     return str(alerts[0]["id"])
 
 
+async def _report(client: AsyncClient, user: AppUser, org: str) -> str:
+    r = await client.post(
+        "/api/v1/reports",
+        json={"report_type": "seller", "format": "csv"},
+        headers=user.headers(org),
+    )
+    assert r.status_code == 202, r.text
+    return str(r.json()["id"])
+
+
 async def _setup(client: AsyncClient, mailer: RecordingMailer) -> dict[str, Any]:
     alice, alice_member, bob, bob_member = (AppUser(n) for n in ("alice", "am", "bob", "bm"))
     org_a = await make_org(client, alice, "Org A")
@@ -201,6 +212,7 @@ async def _setup(client: AsyncClient, mailer: RecordingMailer) -> dict[str, Any]
             "job_id": await _scan(client, alice, org_a),
             "seller_id": await _seller(client, alice, org_a),
             "alert_id": await _alert(client, alice, org_a),
+            "report_id": await _report(client, alice, org_a),
         },
         "b_ids": {
             "user_id": str(bob_member.id),
@@ -211,6 +223,7 @@ async def _setup(client: AsyncClient, mailer: RecordingMailer) -> dict[str, Any]
             "job_id": await _scan(client, bob, org_b),
             "seller_id": await _seller(client, bob, org_b),
             "alert_id": await _alert(client, bob, org_b),
+            "report_id": await _report(client, bob, org_b),
         },
     }
 
@@ -225,6 +238,7 @@ async def _snapshot(client: AsyncClient, user: AppUser, org: str) -> tuple[Any, 
     sellers = (await client.get("/api/v1/sellers", headers=user.headers(org))).json()["items"]
     rules = (await client.get("/api/v1/alert-rules", headers=user.headers(org))).json()["items"]
     alerts = (await client.get("/api/v1/alerts", headers=user.headers(org))).json()["items"]
+    reports = (await client.get("/api/v1/reports", headers=user.headers(org))).json()["items"]
     return (
         org_body["name"],
         sorted((m["user_id"], m["role"], m["status"]) for m in members),
@@ -235,6 +249,7 @@ async def _snapshot(client: AsyncClient, user: AppUser, org: str) -> tuple[Any, 
         sorted((x["id"], x["display_name"], tuple(x["tags"])) for x in sellers),
         sorted((r["id"], r["name"], r["is_enabled"]) for r in rules),
         sorted((a["id"], a["status"], tuple(d["status"] for d in a["deliveries"])) for a in alerts),
+        sorted((r["id"], r["status"]) for r in reports),
     )
 
 

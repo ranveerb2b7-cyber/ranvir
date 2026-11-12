@@ -156,6 +156,8 @@ class InlineDispatcher:
         self.scan_delays: list[float | None] = []
         self.deliver_calls: list[uuid.UUID] = []
         self.defer_alerts = False
+        self.report_calls: list[tuple[uuid.UUID, uuid.UUID]] = []
+        self.defer_reports = False
 
     def scan_deps(self) -> Any:
         from sellerscope.scanning.runner import ScanDeps
@@ -194,6 +196,22 @@ class InlineDispatcher:
             state.mailer,
             state.settings,
             organization_id=organization_id,
+            now=self.clock(),
+        )
+
+    async def generate_report(self, organization_id: uuid.UUID, report_id: uuid.UUID) -> None:
+        from sellerscope.reports.service import generate_report
+
+        self.report_calls.append((organization_id, report_id))
+        if self.defer_reports:
+            return
+        state = self.app.state
+        await generate_report(
+            state.session_factory,
+            state.storage,
+            state.settings,
+            organization_id=organization_id,
+            report_id=report_id,
             now=self.clock(),
         )
 

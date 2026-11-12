@@ -10,6 +10,7 @@ from sellerscope.api.v1 import (
     meta,
     organizations,
     products,
+    reports,
     scans,
     uploads,
 )
@@ -26,3 +27,4 @@ api_router.include_router(scans.router)
 api_router.include_router(meta.router)
 api_router.include_router(intel.router)
 api_router.include_router(alerts.router)
+api_router.include_router(reports.router)
